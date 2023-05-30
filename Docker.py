@@ -1,13 +1,32 @@
-import docker 
+import docker
 from docker import errors
-import json
+from pydantic import BaseModel, Extra
+from exceptions import APIError, ArgumentNotFound, ImageNotFound, RessourceNotFound
+
+class ContainerObj(BaseModel):
+    name: str | None = None #Wenn kein key im request vorhanden setzt der den Wert auf NULL
+    ports: object | None = None#Assign random host port 
+    volumes: list[str | None ]= None
+    detach: bool = True
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Container1",
+                "ports": {'5000/tcp':1000 },
+                "volumes": ["/home/user1/:/mnt/vol2"],
+                "detach": True
+            }
+        }
+        extra = Extra.allow     #Erlaubt das Hinzufügen zusätzlicher Felder
+
 
 
 class Docker():
     def __init__(self):
         self.client = docker.from_env()
 
-########List all running container instances########
+########List all running container instances#######
     def getContainerList(self, showAll):
         list = self.client.containers.list(all=showAll)
         jsonList = []
@@ -23,65 +42,60 @@ class Docker():
 
 ########Get container attributes by ID#############
     def getContainerStats(self, id):
-        container = self.client.containers.get(id)
-        return container.attrs  #Modify with stats()
+        try:
+            container = self.client.containers.get(id)
+            return container.attrs  #Modify with stats()
+        except Exception as e:
+            print(e)
+        except errors.NotFound:
+            raise RessourceNotFound()
 
 ########Start Container by ID######################
     def startContainer(self, id):
         try:
             container = self.client.containers.get(id)
-        except errors.NotFound as es:
-            raise RuntimeError("Container not found")
-        else:
-            return container.start()
+            container.start()
+            return "Container sucessfully started"
+        except errors.NotFound:
+            raise RessourceNotFound()
 
-########Stop Container by ID######################
+########Stop Container by ID#######################
     def stopContainer(self, id):
         try:
             container = self.client.containers.get(id)
-        except errors.NotFound as es:
-            raise RuntimeError("Container not found")
-        else:
-            return container.stop()
+            container.stop()
+            return "Container sucessfully stopped"
+        except errors.NotFound:
+            raise RessourceNotFound()
 
 ########Remove Container by ID######################
     def removeContainer(self, id):
         try:
             container = self.client.containers.get(id)
-        except errors.NotFound as es:
-            raise RuntimeError("Container not found")
-        else:
-            return container.remove(force = True)
+            container.remove(force = True)
+            return "Container sucessfully removed"
+        except errors.NotFound:
+            raise RessourceNotFound()
         
 ########Remove Container by ID######################
     def pruneContainers(self):
         try:
-            return {"Response": "Folgende Container wurden erfolgreich gelöscht",
-                    "obj":self.client.containers.prune()}
+            res = self.client.containers.prune()
+            return {"Following containers sucessfully removed":res}
         except Exception as e:
-            return {"Error": "002", "Message": "Beim Löschen des Container ist ein Fehler aufgetreten"}
-
+            raise e
         
-
-    
-########Create container by Image#############
-    def createContainer(self, image, attr):
-        
-        try:
-            obj = self.client.containers.create(image, detach = attr.detach, ports = {'5000/tcp':attr.ports} )
-            res = {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')}
-            return res
-        except: 
-            res = {"Error": "003", "Message": "Beim Erstellen des Container ist ein Fehler aufgetreten"}
-            return res
-        
-########Run container by Image#############
+########Run container by Image######################
     def runContainer(self, image, attr):
-        
         try:
-            obj = self.client.containers.run(image, detach = attr.detach, ports = {'5000/tcp':attr.ports} )
-            res = {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')}
-            return res
-        except: 
-            res = {"Error": "004", "Message": "Beim Starten des Container ist ein Fehler aufgetreten"}
-            return res
+            obj = self.client.containers.run(image, **attr.dict())
+            return {"Following container sucessfully created": {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')},
+                    "info": "For further parameters visit: https://docker-py.readthedocs.io/en/stable/containers.html"}
+            
+        except errors.APIError as e:
+            if e.status_code == 404:
+                raise ImageNotFound()
+            elif e.status_code >= 409:
+                raise APIError(str(e))
+        except TypeError as e: 
+            raise ArgumentNotFound(e.args[0])
