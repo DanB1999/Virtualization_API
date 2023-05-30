@@ -1,133 +1,50 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Union,Annotated
+from typing import List, Union,Annotated
 import time
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, Security, UploadFile, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from Docker import Docker
-from VM import VM
-
-# to get a string like this run:
-# openssl rand -hex 32
-SECRET_KEY = "b18cddaef06d377b97f01a3de062a2e1ec2cca8cf9a37b543786b9227155ae64"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-
-
-fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
-        "disabled": False,
-    }
-}
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: str | None = None
-
-
-class User(BaseModel):
-    username: str
-    email: str | None = None
-    full_name: str | None = None
-    disabled: bool | None = None
-
-
-class UserInDB(User):
-    hashed_password: str
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+from Docker import Docker, ContainerObj
+from VM import VM, DomainObj
+from Security import Token, pwd_context, authenticate_user, fake_users_db, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, User, get_current_active_user
+from fastapi.middleware.cors import CORSMiddleware
+from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, RessourceNotFound
+import urllib.parse
 
 #Docker und VM-Klassen instanziieren
 docker = Docker()
 
 vm = VM()
 
-
 app = FastAPI()
 
+###Middleware zum Hantieren mit CORS-Anfragen
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+]
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
-
-
-def authenticate_user(fake_db, username: str, password: str):
-    user = get_user(fake_db, username)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-    user = get_user(fake_users_db, username=token_data.username)
-    if user is None:
-        raise credentials_exception
-    return user
-
-
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
 
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
-):
+):  
+    print(form_data.password)
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -137,7 +54,8 @@ async def login_for_access_token(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "scopes": form_data.scopes},
+        expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -149,129 +67,212 @@ async def read_users_me(
     return current_user
 
 
-@app.get("/users/me/items/")
-async def read_own_items(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-):
-    return [{"item_id": "Foo", "owner": current_user.username}]
 
-
-
-
-
-class ContainerObj(BaseModel):
-    name: Union[str, None] = None #Wenn kein key im request vorhanden setzt der den Wert auf NULL
-    ports: int = "1234" 
-    volumes = ["host-vol:mount-vol"]
-    detach: bool = True
-
-class DomainObj(BaseModel):
-    name: Union[str, None] = None
-    memory: int = 500000
-    vcpu: int = 1
-    source_file: str
 
 #Intercept the request and check if daemons are running
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = time.time()
-    time.sleep(5)
-    if vm.checkConnection() == 0:
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        response.headers["X-Process-Time"] = str(process_time)
-        return response
-    else:
-         HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Qemu Deamon not available")
+#@app.middleware("http")
+#async def add_process_time_header(request: Request, call_next):
+#    start_time = time.time()
+#    if vm.libvirtConnect() == 0:
+#        response = await call_next(request)
+#        process_time = time.time() - start_time
+#        response.headers["X-Process-Time"] = str(process_time)
+#        return response
+#    else:
+#         HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Qemu Deamon not available")
 
 
-@app.get("/containers/list/{showAll}")
-def get_list(showAll: bool = False):
+@app.get("/containers")
+async def get_list(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
+    showAll: bool = False, 
+    q: Annotated[str | None, Query(title = "Query string", min_length=3, max_length=50, regex="^fixedquery$")] = None
+):
     list = docker.getContainerList(showAll)
     return list
 
-@app.get("/containers/{id}/stats")
-def get_Info(id: str):
-    info  = docker.getContainerStats(id)
-    return info
+@app.get("/containers/{id}")
+async def get_Info(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
+    id: str
+):
+    try:
+        return docker.getContainerStats(id)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
 @app.put("/containers/{id}/start")
-def start_Container(id: str):
+async def start_Container(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    id: str
+):
     try:
-        res = docker.startContainer(id)
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Container not found")
-    return res
+        return docker.startContainer(id)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
 @app.put("/containers/{id}/stop")
-def stop_Container(id: str):
+async def stop_Container(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],   
+    id: str
+):
     try:
-        res = docker.stopContainer(id)
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Container not found")
-    return res
-
+        return docker.stopContainer(id)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    
 @app.delete("/containers/{id}/remove")
-def remove_Container(id: str):
+async def remove_Container(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    id: str
+):
     try:
-        res = docker.removeContainer(id)
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Container not found")
-    return res
+        return docker.removeContainer(id)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
 @app.delete("/containers/prune")
-def  prune_Containers():
-    return docker.pruneContainers()
+async def prune_Containers(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])]
+):
+    try:
+        return docker.pruneContainers()
+    except Exception as e:
+        raise e
 
 #"bfirsh/reticulate-splines"
-@app.put("/containers/run/")
-def run_Container(obj: ContainerObj, image: str | None = None):
-    return docker.runContainer(image, obj)
+@app.post("/containers/run")
+async def run_Container(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    obj: ContainerObj, 
+    image: str
+):
+    try:
+        decoded_param = urllib.parse.unquote(image)
+        return docker.runContainer(decoded_param, obj)
+    except ImageNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except APIError as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+    except ArgumentNotFound as e3:
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
+
+ 
 
 ###KVM-Qemu
-@app.get("/kvm/list")
-def get_VM_list():
+@app.get("/vms")
+async def get_VM_list(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])]
+):
     return vm.listDomains()
 
-@app.get("/kvm/{id}/stats")
-def get_VM_Info(id: str):
+@app.get("/vms/{id}")
+async def get_VM_Info(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],
+    id: str
+):
     try:
         res = vm.getDomainStats(id)
-    except AttributeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VM not found")
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
     return res
 
-@app.put("/kvm/{id}/start")
-def start_vm(id: str):
+#pausierte VM kann nicht wieder gestartet werden -> "domain is already running"
+@app.put("/vms/{id}/start")
+async def start_vm(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    id: str
+):
     try:
-        res = vm.startVM(id)
-    except AttributeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VM not found")
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_226_IM_USED, detail="VM already running")
-    if res == 0:      
-        raise HTTPException(status_code=status.HTTP_200_OK, detail="VM erfolgreich gestartet")
+        return vm.startVM(id)
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except DomainAlreadyRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-@app.put("/kvm/{id}/stop")
-def stop_vm(id: str):
+@app.put("/vms/{id}/stop")
+async def stop_vm(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    id: str
+):
     try:
-        res = vm.stopVM(id)
-    except AttributeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VM not found")
-    if res == 0:      
-        raise HTTPException(status_code=status.HTTP_200_OK, detail="VM erfolgreich gestoppt")
+        return vm.stopVM(id)
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except DomainNotRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-
-@app.put("/kvm/{id}/shutdown")
-async def shutdown_vm(id: str):
+@app.put("/vms/{id}/shutdown")
+async def shutdown_vm(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    id: str,
+    save: bool = False, 
+):
     try:
-        res = vm.shutdownVM(id)
-    except AttributeError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VM not found")
-    if res == 0:      
-        raise HTTPException(status_code=status.HTTP_200_OK, detail="VM erfolgreich heruntergefahren")
+        return vm.shutdownVM(id,save)
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except DomainNotRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+
+@app.delete("/vms/{id}/delete")
+async def delete_vm(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    id: str
+):
+    try:
+        return vm.deleteVM(id)
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except APIError as e2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e2.message)
+
+class Item(BaseModel):
+    name: str
+    tags: List[str]
+
+#    class Config:
+#        schema_extra: 
+
+@app.post(
+    "/vms/run/xml",
+    openapi_extra={
+        "requestBody": {
+            "content": {"application/xml": {"schema": Item.schema()}},
+            "required": True,
+        },
+    })
+
+async def run_vm_xml(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    request: Request
+):
+    content_type = request.headers['Content-Type']
+    if content_type == "application/xml":
+        body = await request.body()
+
+        res = vm.runVM_xml(body)#Response(content=body, media_type='application/xml')
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Content type {content_type} not supported')
+    return res
+    
+@app.post("/vms/run/json")
+async def run_vm_json(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    obj: DomainObj
+):
+    try:
+        return vm.runVM_json(obj)#Response(content=body, media_type='application/xml')
+    except APIError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
-@app.put("/kvm/run")
-def run_vm(obj: DomainObj):
-    return vm.runVM(obj)
+@app.post("/files/")
+async def create_file(
+    file: Annotated[bytes,File()],
+    fileb:Annotated[UploadFile, File()]
+):
+    return {
+        "file_size": len(file),
+        "fileb_content_type": fileb.content_type
+    }
