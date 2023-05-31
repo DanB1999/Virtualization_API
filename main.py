@@ -124,12 +124,15 @@ async def stop_Container(
 @app.delete("/containers/{id}/remove")
 async def remove_Container(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
-    id: str
+    id: str,
+    force: bool = False 
 ):
     try:
-        return docker.removeContainer(id)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+        return docker.removeContainer(id, force)
+    except RessourceNotFound as e1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except APIError as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
 @app.delete("/containers/prune")
 async def prune_Containers(
