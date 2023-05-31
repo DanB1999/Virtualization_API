@@ -70,6 +70,7 @@ def get_user(db, username: str):
         user_dict = db[username]
         return UserInDB(**user_dict)
 
+#1.Aufruf beim Anmeldung des Users /token-Endpoint
 def authenticate_user(fake_db, username: str, password: str):
     user = get_user(fake_db, username)
     if not user:
@@ -78,6 +79,7 @@ def authenticate_user(fake_db, username: str, password: str):
         return False
     return user
 
+#1.Aufruf beim Anmeldung des Users /token-Endpoint
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
@@ -91,6 +93,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 async def get_current_user(
         security_scopes: SecurityScopes, token: Annotated[str, Depends(oauth2_scheme)]
 ):
+    #
     if security_scopes.scopes:
         authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
     else:
@@ -122,7 +125,7 @@ async def get_current_user(
     return user
 
 async def get_current_active_user(
-    current_user: Annotated[User, Security(get_current_user, scopes=["user"])]
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
     if current_user.disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
