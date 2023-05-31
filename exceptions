@@ -32,3 +32,8 @@ class DomainAlreadyRunning(Exception):
     def __init__(self, message="Requested Domain is already running"):
         self.message = message
         super().__init__(self.message)
+
+class RessourceRunning(Exception):
+    def __init__(self, message="Requested Ressource is still running, please shutoff ressource before continue"):
+        self.message = message
+        super().__init__(self.message)
