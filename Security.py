@@ -12,8 +12,6 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ValidationError
 
-# to get a string like this run:
-# openssl rand -hex 32
 SECRET_KEY = "b18cddaef06d377b97f01a3de062a2e1ec2cca8cf9a37b543786b9227155ae64"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
