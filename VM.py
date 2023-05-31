@@ -5,7 +5,7 @@ from libvirt import virDomain, libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom
 
-from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, RessourceNotFound
+from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, RessourceNotFound, RessourceRunning
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -26,41 +26,20 @@ class DomainObj(BaseModel):
             }
 
 class VM():   
-    def libvirtConnect(self):
-        try:
-            conn = libvirt.open('qemu:///system')
-            return conn
-        except libvirt.libvirtError:
-            raise ConnectionFailed()
-
-    def getDomainByUUID(self, id):
-        conn = self.libvirtConnect()
-        domains = conn.listAllDomains()
-        for dom in domains:
-            uuid = dom.UUIDString()
-            if uuid == id:
-                return dom
-        raise RessourceNotFound()
-            
     def listDomains(self):
         conn = self.libvirtConnect()
-        try:
-            domains = {}
-            domains = conn.listAllDomains()
-            res = []
-            for dom in domains:
-                uuid = dom.UUIDString()
-                res.append({"uuid": uuid,
-                                "name": dom.name(),
-                                #"hostname": domain.hostname(),
-                                "isActive": dom.isActive(),
-                                "status": self.getDomStatus(dom).get("desc"),
-                                "isPersistent": dom.isPersistent()
-                                })
-            return res
-        except libvirtError as e:
-            res = repr(e)
-            return res
+        domains = {}
+        domains = conn.listAllDomains()
+        jsonList = []
+        for dom in domains:
+            jsonList.append({"uuid": dom.UUIDString(),
+                            "name": dom.name(),
+                            #"hostname": domain.hostname(),
+                            "isActive": dom.isActive(),
+                            "status": self.getDomStatus(dom).get("desc"),
+                            "isPersistent": dom.isPersistent()
+                            })
+        return jsonList
 
     def getDomainStats(self, id):
         conn = self.libvirtConnect()
@@ -83,7 +62,6 @@ class VM():
                 }
                 }
     
-
 #VM nach start immernoch pausiert (im virt-manager)
 
     def startVM(self, id):
@@ -92,7 +70,7 @@ class VM():
         #stream=self.conn.newStream(libvirt.VIR_STREAM_NONBLOCK)
         #domain.openConsole(None,stream, 0)
         try:
-            state = self.getDomStatus(dom)
+            state = self.getDomStatus(dom).get("state")
             #dom.create()   #virDomainRestore /virDomainResume
             if state == 3:
                 dom.resume()   #virDomainRestore /virDomainResume
@@ -111,7 +89,7 @@ class VM():
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
         try:
-            state = self.getDomStatus(dom)
+            state = self.getDomStatus(dom).get("state")
             if state == 1:
                 dom.suspend() #suspend- speichert das persistente Image nicht 
                 return "VM sucessfully stopped"
@@ -119,30 +97,70 @@ class VM():
                 raise DomainNotRunning()
         except libvirtError as e:
             return e
+        
+    def createSnapshot(self, id, snapshot_name):
+        conn = self.libvirtConnect()
+        dom = self.getDomainByUUID(id)
+        SNAPSHOT_XML_TEMPLATE = """
+                                <domainsnapshot>
+                                    <name>{snapshot_name}</name>
+                                    <disks>
+                                        <disk name='vda'>
+                                        <driver type='raw'/>
+                                        <source file='/var/lib/libvirt/snapshots'/>
+                                        </disk>
+                                        <!--
+                                        <disk name='vdb' snapshot='no'/>
+                                        <disk name='vdc'>
+                                        <source file='/path/to/newc'>
+                                            <seclabel model='dac' relabel='no'/>
+                                        </source>
+                                        </disk>
+                                        -->
+                                    </disks>
+                                </domainsnapshot>
+                                """
+        try:
+            dom.snapshotCreateXML(
+                SNAPSHOT_XML_TEMPLATE.format(snapshot_name=snapshot_name),
+                libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC
+            )
+        except Exception as e:
+            return e
+
             
     def shutdownVM(self, id, save):
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
         try:
-            if save:
-                dom.managedSave()
-                return "VM sucessfully saved"
+            state = self.getDomStatus(dom).get("state")      
+            if state == 1:
+                if save:
+                    dom.managedSave()
+                    return "VM sucessfully saved"
+                else:
+                    dom.destroy() #Erzwingt das Herunterfahren
+                    return "VM sucessfully shutdown"
             else:
-                dom.destroy() #Erzwingt das Herunterfahren
-            return "VM sucessfully shutdown"
+                raise DomainNotRunning()                    
         except libvirtError as e:
-            if e.get_error_code() == 55:
-                raise DomainNotRunning()
+            return e    
+        #Requested Domain is not runnning
+
+        #Wenn die Vm gelöscht werden soll:  "Requested operation is not valid: cannot undefine transient domain" --> Herunterfahren nicht möglich
+
 
     def deleteVM(self, id):
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
         try:
-            dom.undefine()
             #Aktive Vm wird lediglich pausiert
-            if dom.isActive == False:
-                return "VM was paused, not deleted" 
-            return "VM was sucessfully deleted"
+            state = self.getDomStatus(dom).get("state")      
+            if state != 1:
+                dom.undefine()
+                return "Requested Ressource was sucessfully deleted"
+            else:
+                raise RessourceRunning()
         except libvirtError as e:
             raise APIError(str(e)) ## Error: Cannot undefine transient domain -> Wenn VM am laufen ist?
         
@@ -185,7 +203,7 @@ class VM():
         ​    <emulator>{dict.get("emulator")}</emulator>
         ​    <disk type='file' device='disk'>
         ​      <source file='{dict.get("source_file")}'/>
-        ​      <driver name='qemu' type='raw'/>
+        ​      <driver name='qemu' type='raw'/>                 <!--qcow2????-->
         ​      <target dev='hda'/>
         ​    </disk>
         <!--
@@ -220,7 +238,21 @@ class VM():
         else: 
             hardwareSpecs = "Hello World"
         return hardwareSpecs
+
+    def libvirtConnect(self):
+        try:
+            conn = libvirt.open('qemu:///system')
+            return conn
+        except libvirt.libvirtError:
+            raise ConnectionFailed()
     
+    def getDomainByUUID(self, id):
+        conn = self.libvirtConnect()
+        try:
+            return conn.lookupByUUIDString(id)
+        except:
+            raise RessourceNotFound()
+
     def getDomStatus(self, dom):
         state, maxmem, mem, cpus, cput = dom.info()
         str = ""
