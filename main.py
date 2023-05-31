@@ -58,22 +58,21 @@ async def login_for_access_token(
 
 @app.get("/users/me/", response_model=User)
 async def read_users_me(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
 ):
     return current_user
 
 @app.get("/containers")
 async def get_list(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
     showAll: bool = False, 
-    #q: Annotated[str | None, Query(title = "Query string", min_length=3, max_length=50, regex="^fixedquery$")] = None
 ):
     list = docker.getContainerList(showAll)
     return list
 
 @app.get("/containers/{id}")
 async def get_Info(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
     id: str
 ):
     try:
@@ -83,7 +82,7 @@ async def get_Info(
 
 @app.put("/containers/{id}/start")
 async def start_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     id: str
 ):
     try:
@@ -93,7 +92,7 @@ async def start_Container(
 
 @app.put("/containers/{id}/stop")
 async def stop_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],   
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
     id: str
 ):
     try:
@@ -103,7 +102,7 @@ async def stop_Container(
     
 @app.delete("/containers/{id}/remove")
 async def remove_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
     force: bool = False 
 ):
@@ -116,7 +115,7 @@ async def remove_Container(
 
 @app.delete("/containers/prune")
 async def prune_Containers(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])]
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])]
 ):
     try:
         return docker.pruneContainers()
@@ -125,7 +124,7 @@ async def prune_Containers(
 
 @app.post("/containers/run")
 async def run_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: ContainerObj, 
     image: str
 ):
@@ -142,13 +141,13 @@ async def run_Container(
 ###KVM-Qemu
 @app.get("/vms")
 async def get_VM_list(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])]
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])]
 ):
     return vm.listDomains()
 
 @app.get("/vms/{id}")
 async def get_VM_Info(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],
     id: str
 ):
     try:
@@ -160,7 +159,7 @@ async def get_VM_Info(
 #pausierte VM kann nicht wieder gestartet werden -> "domain is already running"
 @app.put("/vms/{id}/start")
 async def start_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str
 ):
     try:
@@ -172,7 +171,7 @@ async def start_vm(
 
 @app.put("/vms/{id}/stop")
 async def stop_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str
 ):
     try:
@@ -184,7 +183,7 @@ async def stop_vm(
 
 @app.put("/containers/{id}/snapshot")
 async def take_snapshot(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],   
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
     id: str,
     snapshot_name: str
 ):
@@ -195,7 +194,7 @@ async def take_snapshot(
 
 @app.put("/vms/{id}/shutdown")
 async def shutdown_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
     save: bool = False, 
 ):
@@ -208,7 +207,7 @@ async def shutdown_vm(
 
 @app.delete("/vms/{id}/delete")
 async def delete_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     id: str
 ):
     try:
@@ -234,7 +233,7 @@ class Item(BaseModel):
     })
 
 async def run_vm_xml(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],    
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     request: Request
 ):
     content_type = request.headers['Content-Type']
@@ -248,7 +247,7 @@ async def run_vm_xml(
     
 @app.post("/vms/run/json")
 async def run_vm_json(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: DomainObj
 ):
     try:
