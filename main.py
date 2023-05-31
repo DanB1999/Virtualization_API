@@ -11,7 +11,7 @@ from Docker import Docker, ContainerObj
 from VM import VM, DomainObj
 from Security import Token, pwd_context, authenticate_user, fake_users_db, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, User, get_current_active_user
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, RessourceNotFound
+from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, RessourceNotFound, RessourceRunning
 import urllib.parse
 
 #Docker und VM-Klassen instanziieren
@@ -37,14 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
-
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ):  
-    print(form_data.password)
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -62,31 +58,15 @@ async def login_for_access_token(
 
 @app.get("/users/me/", response_model=User)
 async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_active_user)]
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
 ):
     return current_user
-
-
-
-
-#Intercept the request and check if daemons are running
-#@app.middleware("http")
-#async def add_process_time_header(request: Request, call_next):
-#    start_time = time.time()
-#    if vm.libvirtConnect() == 0:
-#        response = await call_next(request)
-#        process_time = time.time() - start_time
-#        response.headers["X-Process-Time"] = str(process_time)
-#        return response
-#    else:
-#         HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Qemu Deamon not available")
-
 
 @app.get("/containers")
 async def get_list(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["user"])],    
     showAll: bool = False, 
-    q: Annotated[str | None, Query(title = "Query string", min_length=3, max_length=50, regex="^fixedquery$")] = None
+    #q: Annotated[str | None, Query(title = "Query string", min_length=3, max_length=50, regex="^fixedquery$")] = None
 ):
     list = docker.getContainerList(showAll)
     return list
@@ -143,7 +123,6 @@ async def prune_Containers(
     except Exception as e:
         raise e
 
-#"bfirsh/reticulate-splines"
 @app.post("/containers/run")
 async def run_Container(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
@@ -159,8 +138,6 @@ async def run_Container(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     except ArgumentNotFound as e3:
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
-
- 
 
 ###KVM-Qemu
 @app.get("/vms")
@@ -205,6 +182,17 @@ async def stop_vm(
     except DomainNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
+@app.put("/containers/{id}/snapshot")
+async def take_snapshot(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],   
+    id: str,
+    snapshot_name: str
+):
+    try:
+        return vm.createSnapshot(id, snapshot_name)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+
 @app.put("/vms/{id}/shutdown")
 async def shutdown_vm(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["admin"])],
@@ -227,15 +215,14 @@ async def delete_vm(
         return vm.deleteVM(id)
     except RessourceNotFound as e1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except APIError as e2:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e2.message)
+    except RessourceRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+    except APIError as e3:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
 
 class Item(BaseModel):
     name: str
     tags: List[str]
-
-#    class Config:
-#        schema_extra: 
 
 @app.post(
     "/vms/run/xml",
@@ -268,7 +255,6 @@ async def run_vm_json(
         return vm.runVM_json(obj)#Response(content=body, media_type='application/xml')
     except APIError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
-
 
 @app.post("/files/")
 async def create_file(
