@@ -50,12 +50,14 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="token",
-    scopes={"basic": "Basic ead permission on ressources", "advanced": "Write and run permission on ressources"}
+    scopes={"basic": "Basic ead permission on ressources", 
+            "advanced": "Write and run permission on ressources"
+    }
 )
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
