@@ -31,13 +31,11 @@ class Docker():
         list = self.client.containers.list(all=showAll)
         jsonList = []
         for i in range(0 , list.__len__()):
-            x = { 
-                "Id" : list[i].short_id,
-                "Name": list[i].attrs['Name'],
-                "Image": list[i].attrs['Config']['Image'],
-                "Status": list[i].attrs['State']['Status'],
-                }
-            jsonList.append(x)
+            jsonList.append({"Id" : list[i].short_id,
+                            "Name": list[i].attrs['Name'],
+                            "Image": list[i].attrs['Config']['Image'],
+                            "Status": list[i].attrs['State']['Status'],
+                            })
         return jsonList
 
 ########Get container attributes by ID#############
@@ -92,6 +90,7 @@ class Docker():
             obj = self.client.containers.run(image, **attr.dict())
             return {"Following container sucessfully created": {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')},
                     "info": "For further parameters visit: https://docker-py.readthedocs.io/en/stable/containers.html"}
+            
         except errors.APIError as e1:
             if e1.status_code == 404:
                 raise ImageNotFound()
