@@ -45,10 +45,9 @@ class Docker():
         try:
             container = self.client.containers.get(id)
             return container.attrs  #Modify with stats()
-        except Exception as e:
-            print(e)
         except errors.NotFound:
-            raise RessourceNotFound()
+            raise RessourceNotFound() 
+
 
 ########Start Container by ID######################
     def startContainer(self, id):
@@ -69,13 +68,15 @@ class Docker():
             raise RessourceNotFound()
 
 ########Remove Container by ID######################
-    def removeContainer(self, id):
+    def removeContainer(self, id, forceBool):
         try:
             container = self.client.containers.get(id)
-            container.remove(force = True)
+            container.remove(force = forceBool)
             return "Container sucessfully removed"
-        except errors.NotFound:
+        except errors.NotFound as e1:
             raise RessourceNotFound()
+        except errors.APIError as e2:
+            raise APIError(str(e2.explanation))
         
 ########Remove Container by ID######################
     def pruneContainers(self):
@@ -91,11 +92,10 @@ class Docker():
             obj = self.client.containers.run(image, **attr.dict())
             return {"Following container sucessfully created": {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')},
                     "info": "For further parameters visit: https://docker-py.readthedocs.io/en/stable/containers.html"}
-            
-        except errors.APIError as e:
-            if e.status_code == 404:
+        except errors.APIError as e1:
+            if e1.status_code == 404:
                 raise ImageNotFound()
-            elif e.status_code >= 409:
-                raise APIError(str(e))
-        except TypeError as e: 
-            raise ArgumentNotFound(e.args[0])
+            elif e1.status_code >= 409:
+                raise APIError(str(e1))
+        except TypeError as e2: 
+            raise ArgumentNotFound(e2.args[0])
