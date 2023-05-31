@@ -68,7 +68,6 @@ def get_user(db, username: str):
         user_dict = db[username]
         return UserInDB(**user_dict)
 
-#1.Aufruf beim Anmeldung des Users /token-Endpoint
 def authenticate_user(fake_db, username: str, password: str):
     user = get_user(fake_db, username)
     if not user:
@@ -77,7 +76,6 @@ def authenticate_user(fake_db, username: str, password: str):
         return False
     return user
 
-#1.Aufruf beim Anmeldung des Users /token-Endpoint
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
