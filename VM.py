@@ -64,12 +64,16 @@ class VM():
     
 #VM nach start immernoch pausiert (im virt-manager)
 
-    def startVM(self, id):
+    def startVM(self, id, revertSnapshot):
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
         #stream=self.conn.newStream(libvirt.VIR_STREAM_NONBLOCK)
         #domain.openConsole(None,stream, 0)
         try:
+            if revertSnapshot:
+                snapshot = dom.snapshotLookupByName(revertSnapshot)
+                dom.revertToSnapshot(snapshot)
+                return "Sucessfully reverted " + revertSnapshot
             state = self.getDomStatus(dom).get("state")
             #dom.create()   #virDomainRestore /virDomainResume
             if state == 3:
@@ -104,20 +108,22 @@ class VM():
         SNAPSHOT_XML_TEMPLATE = """
                                 <domainsnapshot>
                                     <name>{snapshot_name}</name>
+                                    <!--
                                     <disks>
                                         <disk name='vda'>
                                         <driver type='raw'/>
                                         <source file='/var/lib/libvirt/snapshots'/>
                                         </disk>
-                                        <!--
+                                        
                                         <disk name='vdb' snapshot='no'/>
                                         <disk name='vdc'>
                                         <source file='/path/to/newc'>
                                             <seclabel model='dac' relabel='no'/>
                                         </source>
                                         </disk>
-                                        -->
+                                        
                                     </disks>
+                                    -->
                                 </domainsnapshot>
                                 """
         try:
@@ -191,9 +197,9 @@ class VM():
         
         ​  <vcpu>{dict.get("vcpu")}</vcpu>
         ​  <os>
-        ​  <type arch='x86_64' machine='pc'>hvm</type>
+        ​  <type>hvm</type>             <!--arch='x86_64' machine='pc'-->
         ​  <boot dev='hd'/>
-        ​  <boot dev='cdrom'/>
+            <boot dev='cdrom'/>
         ​</os>
         ​  <clock offset='utc'/>
         ​  <on_poweroff>destroy</on_poweroff>
@@ -201,17 +207,19 @@ class VM():
         ​  <on_crash>destroy</on_crash>
         ​  <devices>
         ​    <emulator>{dict.get("emulator")}</emulator>
-        ​    <disk type='file' device='disk'>
+        ​    <disk type='file' device='cdrom'>
         ​      <source file='{dict.get("source_file")}'/>
         ​      <driver name='qemu' type='raw'/>                 <!--qcow2????-->
         ​      <target dev='hda'/>
         ​    </disk>
-        <!--
-           <interface type='bridge'>
-        ​      <mac address='52:54:00:d8:65:c9'/>
-        ​      <source bridge='br0'/>
-        ​    </interface>
-        -->
+            <disk type='file' device='disk'>
+                <driver name='qemu' type='qcow2'/>
+                <source file='/var/lib/libvirt/images/{dict.get("name")}.qcow2'/>           <!-- qemu-img create -f qcow2 vm4.qcow2 10G -->
+                <target dev='vda'/>
+            </disk>
+            <interface type='network'>
+                <source network='default'/>
+            </interface>
         ​    <input type='mouse' bus='ps2'/>
         ​    <graphics type='vnc' port='-1' listen='127.0.0.1'/>
         ​  </devices>
@@ -231,6 +239,12 @@ class VM():
     def getXMLConfig(self, part: str | None = None):
         xmlConfig = ""
         return xmlConfig
+    
+    def editDomain(self):
+        conn = self.libvirtConnect()
+        dom = self.getDomainByUUID(id)
+
+
     
     def getHardwareSpecs(self, part: str | None = None):
         if part:
@@ -265,9 +279,3 @@ class VM():
         return {"state": state,
                 "desc": str
                 }#1 = Running, 3 = paused, 5 = saved, shutoff
-
-
-
-
-
-
