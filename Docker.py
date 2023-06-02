@@ -1,7 +1,7 @@
 import docker
 from docker import errors
 from pydantic import BaseModel, Extra
-from exceptions import APIError, ArgumentNotFound, ImageNotFound, RessourceNotFound
+from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound
 
 class ContainerObj(BaseModel):
     name: str | None = None #Wenn kein key im request vorhanden setzt der den Wert auf NULL
@@ -40,12 +40,8 @@ class Docker():
 
 ########Get container attributes by ID#############
     def getContainerStats(self, id):
-        try:
-            container = self.client.containers.get(id)
-            return container.attrs  #Modify with stats()
-        except errors.NotFound:
-            raise RessourceNotFound() 
-
+        container = self.client.containers.get(id)
+        return container.attrs  #Modify with stats()
 
 ########Start Container by ID######################
     def startContainer(self, id):
@@ -53,8 +49,8 @@ class Docker():
             container = self.client.containers.get(id)
             container.start()
             return "Container sucessfully started"
-        except errors.NotFound:
-            raise RessourceNotFound()
+        except errors.APIError as e2:
+            raise APIError(str(e2.explanation))
 
 ########Stop Container by ID#######################
     def stopContainer(self, id):
@@ -62,8 +58,8 @@ class Docker():
             container = self.client.containers.get(id)
             container.stop()
             return "Container sucessfully stopped"
-        except errors.NotFound:
-            raise RessourceNotFound()
+        except errors.APIError as e2:
+            raise APIError(str(e2.explanation))
 
 ########Remove Container by ID######################
     def removeContainer(self, id, forceBool):
@@ -71,8 +67,6 @@ class Docker():
             container = self.client.containers.get(id)
             container.remove(force = forceBool)
             return "Container sucessfully removed"
-        except errors.NotFound as e1:
-            raise RessourceNotFound()
         except errors.APIError as e2:
             raise APIError(str(e2.explanation))
         
@@ -81,8 +75,8 @@ class Docker():
         try:
             res = self.client.containers.prune()
             return {"Following containers sucessfully removed":res}
-        except Exception as e:
-            raise e
+        except errors.APIError as e2:
+            raise APIError(str(e2.explanation))
         
 ########Run container by Image######################
     def runContainer(self, image, attr):
@@ -98,3 +92,9 @@ class Docker():
                 raise APIError(str(e1))
         except TypeError as e2: 
             raise ArgumentNotFound(e2.args[0])
+        
+    def getContainerbyID(self,id):
+        try:
+            return self.client.containers.get(id)
+        except errors.NotFound:
+            raise ResourceNotFound()
