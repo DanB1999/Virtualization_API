@@ -6,10 +6,8 @@ from libvirt import virDomain, libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-import xml.etree.ElementTree as ET
 
-
-from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, RessourceNotFound, RessourceRunning
+from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, ResourceNotFound, ResourceRunning
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -185,9 +183,19 @@ class VM():
                 dom.undefine()
                 return "Requested Ressource was sucessfully deleted"
             else:
-                raise RessourceRunning()
+                raise ResourceRunning()
         except libvirtError as e:
             raise APIError(str(e)) ## Error: Cannot undefine transient domain -> Wenn VM am laufen ist?
+    
+    def deleteSnapshot(self, id, name):
+        conn = self.libvirtConnect()
+        dom = self.getDomainByUUID(id)
+        try:
+            snapshot = dom.snapshotLookupByName(name)
+            snapshot.delete()
+            return "Snapshot " + name + " sucessfully deleted"
+        except libvirtError as e:
+            raise APIError(str(e))
         
     def runVM_xml(self, body):
             conn = self.libvirtConnect()
