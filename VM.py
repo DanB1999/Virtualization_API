@@ -1,9 +1,13 @@
+from datetime import datetime
 import sys
 from typing import Union
 import libvirt
 from libvirt import virDomain, libvirtError
 from pydantic import BaseModel
-import xml.dom.minidom
+import xml.dom.minidom    
+from lxml import etree
+import xml.etree.ElementTree as ET
+
 
 from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, RessourceNotFound, RessourceRunning
 
@@ -40,6 +44,21 @@ class VM():
                             "isPersistent": dom.isPersistent()
                             })
         return jsonList
+    
+    def listSnapshots(self, id):
+        onn = self.libvirtConnect()
+        dom = self.getDomainByUUID(id)
+        snapshots = dom.listAllSnapshots()
+        jsonList = []
+        for elem in snapshots:
+            xmlDesc = etree.fromstring(elem.getXMLDesc())
+            creationTime = xmlDesc.find('creationTime')
+            jsonList.append({"name": elem.getName(),
+                             "timestamp": datetime.fromtimestamp(int(xmlDesc.find('creationTime').text)),
+                             "state": xmlDesc.find('state').text,
+                             "isCurrent": elem.isCurrent(),
+                             "memorySnapshot": xmlDesc.find('memory').get('snapshot')})                             
+        return jsonList
 
     def getDomainStats(self, id):
         conn = self.libvirtConnect()
@@ -67,8 +86,6 @@ class VM():
     def startVM(self, id, revertSnapshot):
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
-        #stream=self.conn.newStream(libvirt.VIR_STREAM_NONBLOCK)
-        #domain.openConsole(None,stream, 0)
         try:
             if revertSnapshot:
                 snapshot = dom.snapshotLookupByName(revertSnapshot)
@@ -133,9 +150,8 @@ class VM():
             )
         except Exception as e:
             return e
-
             
-    def shutdownVM(self, id, save):
+    def shutdownVM(self, id, save, force):
         conn = self.libvirtConnect()
         dom = self.getDomainByUUID(id)
         try:
@@ -144,8 +160,11 @@ class VM():
                 if save:
                     dom.managedSave()
                     return "VM sucessfully saved"
-                else:
+                elif force:
                     dom.destroy() #Erzwingt das Herunterfahren
+                    return "VM was forced to shutdown"
+                else:    
+                    dom.shutdown()
                     return "VM sucessfully shutdown"
             else:
                 raise DomainNotRunning()                    
@@ -264,8 +283,10 @@ class VM():
         conn = self.libvirtConnect()
         try:
             return conn.lookupByUUIDString(id)
-        except:
-            raise RessourceNotFound()
+        except Exception:
+            return None
+
+
 
     def getDomStatus(self, dom):
         state, maxmem, mem, cpus, cput = dom.info()
