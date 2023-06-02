@@ -160,10 +160,11 @@ async def get_VM_Info(
 @app.put("/vms/{id}/start")
 async def start_vm(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
-    id: str
+    id: str,
+    revertSnapshot = None
 ):
     try:
-        return vm.startVM(id)
+        return vm.startVM(id, revertSnapshot)
     except RessourceNotFound as e1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
     except DomainAlreadyRunning as e2:
