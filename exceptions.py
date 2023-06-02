@@ -1,5 +1,5 @@
-class RessourceNotFound(Exception):
-    def __init__(self, message="Ressource not found -> Please check the identifier and try it again"):
+class ResourceNotFound(Exception):
+    def __init__(self, message="Resource not found -> Please check the identifier and try it again"):
         self.message = message
         super().__init__(self.message)
 
@@ -33,7 +33,7 @@ class DomainAlreadyRunning(Exception):
         self.message = message
         super().__init__(self.message)
 
-class RessourceRunning(Exception):
-    def __init__(self, message="Requested Ressource is still running, please shutoff ressource before continue"):
+class ResourceRunning(Exception):
+    def __init__(self, message="Requested Resource is still running, please shutoff resource before continue"):
         self.message = message
         super().__init__(self.message)
