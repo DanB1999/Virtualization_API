@@ -62,58 +62,86 @@ async def read_users_me(
 ):
     return current_user
 
-@app.get("/containers")
+@app.get("/ressources")
 async def get_list(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
-    showAll: bool = False, 
+    type: Annotated[str, Query(description="docker container, kvm-qemu")]
 ):
-    list = docker.getContainerList(showAll)
-    return list
+    if type in "docker-container":
+        return docker.getContainerList(True)
+    elif type in "kvm-qemu":
+        return vm.listDomains()
 
-@app.get("/containers/{id}")
+@app.get("/ressources/{id}")
 async def get_Info(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
-    id: str
+    id: str,
+    filter: Annotated[bool, Query(description="List Snapshots of VM")] = False
 ):
-    try:
+    if getRessourceById(id) == "docker":
         return docker.getContainerStats(id)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    elif getRessourceById(id) == "kvm-qemu":
+        if filter:
+            return vm.listSnapshots(id)
+        else:
+            return vm.getDomainStats(id)
+        
 
-@app.put("/containers/{id}/start")
-async def start_Container(
+@app.put("/ressources/{id}/start")
+async def start_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
-    id: str
-):
-    try:
-        return docker.startContainer(id)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    id: str,
+    revertSnapshot = None
 
-@app.put("/containers/{id}/stop")
-async def stop_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
-    id: str
 ):
     try:
-        return docker.stopContainer(id)
+
+        if getRessourceById(id) == "docker":
+            return docker.startContainer(id)
+        elif getRessourceById(id) == "kvm-qemu":
+            return vm.startVM(id, revertSnapshot)
     except RessourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except DomainAlreadyRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+
+@app.put("/ressources/{id}/stop")
+async def stop_Ressource(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
+    id: str,
+    type: str
+):
+    try:
+        if getRessourceById(id) == "docker":
+            return docker.startContainer(id)
+        elif getRessourceById(id) == "kvm-qemu":
+            return vm.stopVM(id)
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except DomainNotRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     
-@app.delete("/containers/{id}/remove")
-async def remove_Container(
+@app.delete("/resources/{id}/delete")
+async def remove_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
+    type: str,
     force: bool = False 
 ):
     try:
-        return docker.removeContainer(id, force)
+        if getRessourceById(id) == "docker":
+            return docker.removeContainer(id, force)
+        elif getRessourceById(id) == "kvm-qemu":
+            return vm.deleteVM(id)
     except RessourceNotFound as e1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except APIError as e2:
+    except RessourceRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+    except APIError as e3:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
 
-@app.delete("/containers/prune")
+#Docker-spezifische Funktionen:
+@app.delete("/ressources/docker/prune")
 async def prune_Containers(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])]
 ):
@@ -122,7 +150,7 @@ async def prune_Containers(
     except Exception as e:
         raise e
 
-@app.post("/containers/run")
+@app.post("/ressources/docker/run")
 async def run_Container(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: ContainerObj, 
@@ -138,51 +166,8 @@ async def run_Container(
     except ArgumentNotFound as e3:
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
 
-###KVM-Qemu
-@app.get("/vms")
-async def get_VM_list(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])]
-):
-    return vm.listDomains()
-
-@app.get("/vms/{id}")
-async def get_VM_Info(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],
-    id: str
-):
-    try:
-        res = vm.getDomainStats(id)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    return res
-
-#pausierte VM kann nicht wieder gestartet werden -> "domain is already running"
-@app.put("/vms/{id}/start")
-async def start_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
-    id: str,
-    revertSnapshot = None
-):
-    try:
-        return vm.startVM(id, revertSnapshot)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except DomainAlreadyRunning as e2:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
-
-@app.put("/vms/{id}/stop")
-async def stop_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
-    id: str
-):
-    try:
-        return vm.stopVM(id)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except DomainNotRunning as e2:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
-
-@app.put("/containers/{id}/snapshot")
+#KVM-Qemu-spezifische Funktionen:
+@app.put("/ressources/{id}/snapshot")
 async def take_snapshot(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
     id: str,
@@ -192,40 +177,29 @@ async def take_snapshot(
         return vm.createSnapshot(id, snapshot_name)
     except RessourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except APIError as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-@app.put("/vms/{id}/shutdown")
+@app.put("/ressources/{id}/shutdown")
 async def shutdown_vm(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
-    save: bool = False, 
+    save: Annotated[bool, Query(description="Save VM for later use, priority over force command")] = False, 
+    force: bool = False, 
 ):
     try:
-        return vm.shutdownVM(id,save)
+        return vm.shutdownVM(id, save, force)
     except RessourceNotFound as e1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
     except DomainNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
-
-@app.delete("/vms/{id}/delete")
-async def delete_vm(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
-    id: str
-):
-    try:
-        return vm.deleteVM(id)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except RessourceRunning as e2:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
-    except APIError as e3:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
 
 class Item(BaseModel):
     name: str
     tags: List[str]
 
 @app.post(
-    "/vms/run/xml",
+    "/ressources/kvmqemu/run/xml",
     openapi_extra={
         "requestBody": {
             "content": {"application/xml": {"schema": Item.schema()}},
@@ -246,7 +220,7 @@ async def run_vm_xml(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Content type {content_type} not supported')
     return res
     
-@app.post("/vms/run/json")
+@app.post("/ressources/kvmqemu/run/json")
 async def run_vm_json(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: DomainObj
@@ -256,12 +230,12 @@ async def run_vm_json(
     except APIError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
-@app.post("/files/")
-async def create_file(
-    file: Annotated[bytes,File()],
-    fileb:Annotated[UploadFile, File()]
-):
-    return {
-        "file_size": len(file),
-        "fileb_content_type": fileb.content_type
-    }
+def getRessourceById(id):
+    try:
+        if vm.getDomainByUUID(id):
+            return "kvm-qemu"
+        elif docker.getContainerbyID(id):
+            return "docker"
+    except RessourceNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+        
