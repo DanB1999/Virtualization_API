@@ -11,7 +11,7 @@ from Docker import Docker, ContainerObj
 from VM import VM, DomainObj
 from Security import Token, pwd_context, authenticate_user, fake_users_db, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, User, get_current_active_user
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, RessourceNotFound, RessourceRunning
+from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, ResourceNotFound, ResourceRunning
 import urllib.parse
 
 #Docker und VM-Klassen instanziieren
@@ -92,7 +92,6 @@ async def start_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     id: str,
     revertSnapshot = None
-
 ):
     try:
 
@@ -100,8 +99,8 @@ async def start_Ressource(
             return docker.startContainer(id)
         elif getResourceById(id) == "kvm-qemu":
             return vm.startVM(id, revertSnapshot)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except DomainAlreadyRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
@@ -116,8 +115,8 @@ async def stop_Ressource(
             return docker.startContainer(id)
         elif getResourceById(id) == "kvm-qemu":
             return vm.stopVM(id)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except DomainNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     
@@ -136,9 +135,9 @@ async def remove_Ressource(
                 return vm.deleteSnapshot(id, deleteSnapshot)
             else:
                 return vm.deleteVM(id)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except RessourceRunning as e2:
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
+    except ResourceRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     except APIError as e3:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
@@ -150,8 +149,8 @@ async def prune_Containers(
 ):
     try:
         return docker.pruneContainers()
-    except Exception as e:
-        raise e
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
 
 @app.post("/resources/docker/run")
 async def run_Container(
@@ -162,10 +161,10 @@ async def run_Container(
     try:
         decoded_param = urllib.parse.unquote(image)
         return docker.runContainer(decoded_param, obj)
-    except ImageNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
-    except APIError as e2:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
+    except ImageNotFound as e2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e2.message)
     except ArgumentNotFound as e3:
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
 
@@ -178,10 +177,8 @@ async def take_snapshot(
 ):
     try:
         return vm.createSnapshot(id, snapshot_name)
-    except RessourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
-    except APIError as e2:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
 
 @app.put("/resources/{id}/shutdown")
 async def shutdown_vm(
@@ -192,8 +189,8 @@ async def shutdown_vm(
 ):
     try:
         return vm.shutdownVM(id, save, force)
-    except RessourceNotFound as e1:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except DomainNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
@@ -239,5 +236,5 @@ def getResourceById(id):
             return "kvm-qemu"
         elif docker.getContainerbyID(id):
             return "docker"
-    except RessourceNotFound as e:
+    except ResourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
