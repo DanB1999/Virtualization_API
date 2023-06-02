@@ -62,7 +62,7 @@ async def read_users_me(
 ):
     return current_user
 
-@app.get("/ressources")
+@app.get("/resources")
 async def get_list(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
     type: Annotated[str, Query(description="docker container, kvm-qemu")]
@@ -72,22 +72,22 @@ async def get_list(
     elif type in "kvm-qemu":
         return vm.listDomains()
 
-@app.get("/ressources/{id}")
+@app.get("/resources/{id}")
 async def get_Info(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
     id: str,
     filter: Annotated[bool, Query(description="List Snapshots of VM")] = False
 ):
-    if getRessourceById(id) == "docker":
+    if getResourceById(id) == "docker":
         return docker.getContainerStats(id)
-    elif getRessourceById(id) == "kvm-qemu":
+    elif getResourceById(id) == "kvm-qemu":
         if filter:
             return vm.listSnapshots(id)
         else:
             return vm.getDomainStats(id)
         
 
-@app.put("/ressources/{id}/start")
+@app.put("/resources/{id}/start")
 async def start_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     id: str,
@@ -96,25 +96,25 @@ async def start_Ressource(
 ):
     try:
 
-        if getRessourceById(id) == "docker":
+        if getResourceById(id) == "docker":
             return docker.startContainer(id)
-        elif getRessourceById(id) == "kvm-qemu":
+        elif getResourceById(id) == "kvm-qemu":
             return vm.startVM(id, revertSnapshot)
     except RessourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except DomainAlreadyRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-@app.put("/ressources/{id}/stop")
+@app.put("/resources/{id}/stop")
 async def stop_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
     id: str,
     type: str
 ):
     try:
-        if getRessourceById(id) == "docker":
+        if getResourceById(id) == "docker":
             return docker.startContainer(id)
-        elif getRessourceById(id) == "kvm-qemu":
+        elif getResourceById(id) == "kvm-qemu":
             return vm.stopVM(id)
     except RessourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -125,14 +125,17 @@ async def stop_Ressource(
 async def remove_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
-    type: str,
-    force: bool = False 
+    force: Annotated[bool, Query(description="Force Deletion of docker container")] = False,
+    deleteSnapshot: Annotated[str, Query(description="Delete snapshot instead of vm")] = None
 ):
     try:
-        if getRessourceById(id) == "docker":
-            return docker.removeContainer(id, force)
-        elif getRessourceById(id) == "kvm-qemu":
-            return vm.deleteVM(id)
+        if getResourceById(id) == "docker":
+            return docker.removeContainer(id)
+        elif getResourceById(id) == "kvm-qemu":
+            if deleteSnapshot:
+                return vm.deleteSnapshot(id, deleteSnapshot)
+            else:
+                return vm.deleteVM(id)
     except RessourceNotFound as e1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e1.message)
     except RessourceRunning as e2:
@@ -141,7 +144,7 @@ async def remove_Ressource(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
 
 #Docker-spezifische Funktionen:
-@app.delete("/ressources/docker/prune")
+@app.delete("/resources/docker/prune")
 async def prune_Containers(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])]
 ):
@@ -150,7 +153,7 @@ async def prune_Containers(
     except Exception as e:
         raise e
 
-@app.post("/ressources/docker/run")
+@app.post("/resources/docker/run")
 async def run_Container(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: ContainerObj, 
@@ -167,7 +170,7 @@ async def run_Container(
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
 
 #KVM-Qemu-spezifische Funktionen:
-@app.put("/ressources/{id}/snapshot")
+@app.put("/resources/{id}/snapshot")
 async def take_snapshot(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
     id: str,
@@ -180,7 +183,7 @@ async def take_snapshot(
     except APIError as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-@app.put("/ressources/{id}/shutdown")
+@app.put("/resources/{id}/shutdown")
 async def shutdown_vm(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
@@ -199,7 +202,7 @@ class Item(BaseModel):
     tags: List[str]
 
 @app.post(
-    "/ressources/kvmqemu/run/xml",
+    "/resources/kvmqemu/run/xml",
     openapi_extra={
         "requestBody": {
             "content": {"application/xml": {"schema": Item.schema()}},
@@ -220,7 +223,7 @@ async def run_vm_xml(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Content type {content_type} not supported')
     return res
     
-@app.post("/ressources/kvmqemu/run/json")
+@app.post("/resources/kvmqemu/run/json")
 async def run_vm_json(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: DomainObj
@@ -230,7 +233,7 @@ async def run_vm_json(
     except APIError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
-def getRessourceById(id):
+def getResourceById(id):
     try:
         if vm.getDomainByUUID(id):
             return "kvm-qemu"
@@ -238,4 +241,3 @@ def getRessourceById(id):
             return "docker"
     except RessourceNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
-        
