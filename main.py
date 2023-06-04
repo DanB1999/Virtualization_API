@@ -1,27 +1,19 @@
-from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import List, Union,Annotated
-import time
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, Security, UploadFile, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from datetime import  timedelta
+from typing import List, Annotated
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security, status
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from Docker import Docker, ContainerObj
 from VM import VM, DomainObj
-from Security import Token, pwd_context, authenticate_user, fake_users_db, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, User, get_current_active_user
+from Security import User, Token, fake_users_db, authenticate_user, create_access_token, get_current_active_user, ACCESS_TOKEN_EXPIRE_MINUTES
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import APIError, ArgumentNotFound, DomainAlreadyRunning, DomainNotRunning, ImageNotFound, ResourceNotFound, ResourceRunning
-import urllib.parse
+from exceptions import APIError, ArgumentNotFound, ResourceAlreadyRunning, ResourceNotRunning, ImageNotFound, ResourceRunning
 
-#Docker und VM-Klassen instanziieren
 docker = Docker()
-
 vm = VM()
 
 app = FastAPI()
 
-###Middleware zum Hantieren mit CORS-Anfragen
 origins = [
     "http://localhost.tiangolo.com",
     "https://localhost.tiangolo.com",
@@ -55,7 +47,6 @@ async def login_for_access_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-
 @app.get("/users/me/", response_model=User)
 async def read_users_me(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
@@ -65,13 +56,15 @@ async def read_users_me(
 @app.get("/resources")
 async def get_list(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
-    type: Annotated[str, Query(description="docker container, kvm-qemu, kvm-qemu volumes")]
+    type: Annotated[str, Query(description="docker container, docker images, kvm-qemu vms, kvm-qemu volumes")]
 ):
-    if type in "docker-container":
-        return docker.getContainerList(True)
-    elif type in "kvm-qemu":
+    if type in "docker container":
+        return docker.getContainerList()
+    elif type in "docker images":
+        return docker.getImageList()
+    elif type in "kvm-qemu vms":
         return vm.listDomains()
-    elif type in "volumes":
+    elif type in "kvm-qemu volumes":
         return vm.listStorageVolumes()
 
 @app.get("/resources/{id}")
@@ -87,7 +80,6 @@ async def get_Info(
             return vm.listSnapshots(id)
         else:
             return vm.getDomainStats(id)
-        
 
 @app.put("/resources/{id}/start")
 async def start_Ressource(
@@ -96,14 +88,13 @@ async def start_Ressource(
     revertSnapshot = None
 ):
     try:
-
         if getResourceById(id) == "docker":
             return docker.startContainer(id)
         elif getResourceById(id) == "kvm-qemu":
             return vm.startVM(id, revertSnapshot)
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
-    except DomainAlreadyRunning as e2:
+    except ResourceAlreadyRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
 @app.put("/resources/{id}/stop")
@@ -113,12 +104,12 @@ async def stop_Ressource(
 ):
     try:
         if getResourceById(id) == "docker":
-            return docker.startContainer(id)
+            return docker.stopContainer(id)
         elif getResourceById(id) == "kvm-qemu":
             return vm.stopVM(id)
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
-    except DomainNotRunning as e2:
+    except ResourceNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     
 @app.delete("/resources/{id}/delete")
@@ -129,26 +120,22 @@ async def remove_Ressource(
     deleteSnapshot: Annotated[str, Query(description="Delete snapshot instead of vm")] = None,
 ):
     try:
-        return docker.removeContainer(id)
-    #try:
-    #    if getResourceById(id) == "docker":
-    #        return docker.removeContainer(id)
-    #    elif getResourceById(id) == "kvm-qemu":
-    #        if deleteSnapshot:
-    #            return vm.deleteSnapshot(id, deleteSnapshot)
-    #        if len(vm.getDomainSnapshots(id)) == 0:
-    #            if deleteStorageVol:
-    #                    vm.deleteStorageVol(id)
-    #            return vm.deleteVM(id)
-    #        else: 
-    #            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete inactive domain with " + str(len(vm.getDomainSnapshots(id)))+ " snapshots")
-#
+        if getResourceById(id) == "docker":
+            return docker.removeContainer(id)
+        elif getResourceById(id) == "kvm-qemu":
+            if deleteSnapshot:
+                return vm.deleteSnapshot(id, deleteSnapshot)
+            if len(vm.getDomainSnapshots(id)) == 0:
+                if deleteStorageVol:
+                    vm.deleteStorageVol(id)
+                return vm.deleteVM(id)
+            else: 
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete inactive domain with " + str(len(vm.getDomainSnapshots(id)))+ " snapshots")
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except ResourceRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
 
-#Docker-spezifische Funktionen:
 @app.delete("/resources/docker/prune")
 async def prune_Containers(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])]
@@ -158,23 +145,6 @@ async def prune_Containers(
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
 
-@app.post("/resources/docker/run")
-async def run_Container(
-    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
-    obj: ContainerObj, 
-    image: str
-):
-    try:
-        decoded_param = urllib.parse.unquote(image)
-        return docker.runContainer(decoded_param, obj)
-    except APIError as e1:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
-    except ImageNotFound as e2:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e2.message)
-    except ArgumentNotFound as e3:
-        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
-
-#KVM-Qemu-spezifische Funktionen:
 @app.put("/resources/{id}/snapshot")
 async def take_snapshot(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
@@ -199,22 +169,35 @@ async def shutdown_vm(
         return vm.shutdownVM(id, save, force)
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
-    except DomainNotRunning as e2:
+    except ResourceNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+
+@app.post("/resources/docker/run")
+async def run_Container(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
+    obj: ContainerObj, 
+    image: str
+):
+    try:
+        return docker.runContainer(image, obj)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
+    except ImageNotFound as e2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e2.message)
+    except ArgumentNotFound as e3:
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=e3.message)
 
 class Item(BaseModel):
     name: str
     tags: List[str]
 
 @app.post(
-    "/resources/kvmqemu/run/xml",
+    "/resources/kvm-qemu/run/xml",
     openapi_extra={
         "requestBody": {
             "content": {"application/xml": {"schema": Item.schema()}},
             "required": True,
-        },
-    })
-
+        }})
 async def run_vm_xml(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],    
     request: Request
@@ -222,20 +205,19 @@ async def run_vm_xml(
     content_type = request.headers['Content-Type']
     if content_type == "application/xml":
         body = await request.body()
-
-        res = vm.runVM_xml(body)#Response(content=body, media_type='application/xml')
+        res = vm.runVM_xml(body)
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Content type {content_type} not supported')
     return res
     
-@app.post("/resources/kvmqemu/run/json")
+@app.post("/resources/kvm-qemu/run/json")
 async def run_vm_json(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     obj: DomainObj
 ):
     try:
         vm.createStorageVol(obj.dict().get("name"))
-        return vm.runVM_json(obj)#Response(content=body, media_type='application/xml')
+        return vm.runVM_json(obj)
     except APIError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
