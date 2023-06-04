@@ -1,13 +1,11 @@
 from datetime import datetime
-import sys
 from typing import Union
 import libvirt
-from libvirt import virDomain, libvirtError
+from libvirt import libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-
-from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, ResourceNotFound, ResourceRunning
+from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, ResourceRunning
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -36,7 +34,6 @@ class VM():
         for dom in domains:
             jsonList.append({"uuid": dom.UUIDString(),
                             "name": dom.name(),
-                            #"hostname": domain.hostname(),
                             "isActive": dom.isActive(),
                             "status": self.getDomStatus(dom).get("desc"),
                             "isPersistent": dom.isPersistent()
@@ -66,17 +63,15 @@ class VM():
         jsonList = []
         for stgvolname in stgvols:
             stgvol = pool.storageVolLookupByName(stgvolname)
-            #str(stgvolname).split("/")[-1]
             info = stgvol.info()
             jsonList.append({"name": stgvolname,
-                             "path": stgvolname,
+                             "path": stgvol.path(),
                              "Type": str(info[0]),
                              "Capacity": str(info[1]),
-                             "Allocation": str(info[1])
+                             "Allocation": str(info[2])
                              })
             
         return jsonList
-
 
     def getDomainStats(self, id):
         conn = self.libvirtConnect()
@@ -84,7 +79,6 @@ class VM():
         state, maxmem, mem, cpus, cput = dom.info()
         return {"uuid": dom.UUIDString(),
                 "name": dom.name(),
-                #"hostname": dom.hostname(),
                 "isActive": dom.isActive(),
                 "status": self.getDomStatus(dom).get("desc"),
                 "isPersistent": dom.isPersistent(),
@@ -96,10 +90,7 @@ class VM():
                     "memory": str(mem),
                     "cpuNum": str(cpus),
                     "cpuTime": str(cput)
-                }
-                }
-    
-#VM nach start immernoch pausiert (im virt-manager)
+                }}
 
     def startVM(self, id, revertSnapshot):
         conn = self.libvirtConnect()
@@ -110,19 +101,16 @@ class VM():
                 dom.revertToSnapshot(snapshot)
                 return "Sucessfully reverted " + revertSnapshot
             state = self.getDomStatus(dom).get("state")
-            #dom.create()   #virDomainRestore /virDomainResume
             if state == 3:
-                dom.resume()   #virDomainRestore /virDomainResume
+                dom.resume()
                 return "VM sucessfully resumed"
             elif state == 5:
                 dom.create()
                 return "VM sucessfully restarted"
             elif state == 1:
                 raise DomainAlreadyRunning()
-
-        except libvirtError as e: #Except: Domain is already running
-            return e                
-        #domain.reboot() 
+        except libvirtError as e:
+            raise APIError(str(e))            
     
     def stopVM(self, id):
         conn = self.libvirtConnect()
@@ -130,45 +118,28 @@ class VM():
         try:
             state = self.getDomStatus(dom).get("state")
             if state == 1:
-                dom.suspend() #suspend- speichert das persistente Image nicht 
+                dom.suspend()
                 return "VM sucessfully stopped"
             else:
                 raise DomainNotRunning()
         except libvirtError as e:
-            return e
+            raise APIError(str(e))
         
     def createSnapshot(self, id, snapshot_name):
         conn = self.libvirtConnect()
         dom = conn.lookupByUUIDString(id)
-        SNAPSHOT_XML_TEMPLATE = """
-                                <domainsnapshot>
-                                    <name>{snapshot_name}</name>
-                                    <!--
-                                    <disks>
-                                        <disk name='vda'>
-                                        <driver type='raw'/>
-                                        <source file='/var/lib/libvirt/snapshots'/>
-                                        </disk>
-                                        
-                                        <disk name='vdb' snapshot='no'/>
-                                        <disk name='vdc'>
-                                        <source file='/path/to/newc'>
-                                            <seclabel model='dac' relabel='no'/>
-                                        </source>
-                                        </disk>
-                                        
-                                    </disks>
-                                    -->
-                                </domainsnapshot>
-                                """
+        xmlconfig = f"""
+            <domainsnapshot>
+                <name>{snapshot_name}</name>
+            </domainsnapshot>"""
         try:
             dom.snapshotCreateXML(
-                SNAPSHOT_XML_TEMPLATE.format(snapshot_name=snapshot_name),
+                xmlconfig.format(snapshot_name=snapshot_name),
                 libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC
             )
             return "Snaphot of " + dom.name() + " was sucessfully created"
-        except Exception as e:
-            return e
+        except libvirtError as e:
+            raise APIError(str(e))
             
     def shutdownVM(self, id, save, force):
         conn = self.libvirtConnect()
@@ -180,7 +151,7 @@ class VM():
                     dom.managedSave()
                     return "VM sucessfully saved"
                 elif force:
-                    dom.destroy() #Erzwingt das Herunterfahren
+                    dom.destroy()
                     return "VM was forced to shutdown"
                 else:    
                     dom.shutdown()
@@ -188,17 +159,12 @@ class VM():
             else:
                 raise DomainNotRunning()                    
         except libvirtError as e:
-            return e    
-        #Requested Domain is not runnning
-
-        #Wenn die Vm gelöscht werden soll:  "Requested operation is not valid: cannot undefine transient domain" --> Herunterfahren nicht möglich
-
+            raise APIError(str(e))  
 
     def deleteVM(self, id):
         conn = self.libvirtConnect()
         dom = conn.lookupByUUIDString(id)
         try:
-            #Aktive Vm wird lediglich pausiert
             state = self.getDomStatus(dom).get("state")      
             if state != 1:
                 dom.undefine()
@@ -206,7 +172,7 @@ class VM():
             else:
                 raise ResourceRunning()
         except libvirtError as e:
-            raise APIError(str(e)) ## Error: Cannot undefine transient domain -> Wenn VM am laufen ist?
+            raise APIError(str(e))
     
     def deleteSnapshot(self, id, name):
         conn = self.libvirtConnect()
@@ -233,120 +199,91 @@ class VM():
             else:
                 raise ResourceRunning()
         except libvirtError as e:
-            raise APIError("Failed to delete storage volume")            
+            raise APIError(str(e))          
         
     def runVM_xml(self, body):
-            conn = self.libvirtConnect()
-            xmlconfig = xml.dom.minidom.parseString(body)
-            new_xml = xmlconfig.toprettyxml()
-            dom = None
-            try:
-                dom = self.conn.defineXMLFlags(new_xml, 0)
-                dom.create()
-                return {"Following guest sucessfully booted": {"Id" : dom.UUIDString(), "Name": dom.name()},
-                        "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
-            except libvirtError as e:
-                raise APIError(str(e))
+        conn = self.libvirtConnect()
+        xmlconfig = xml.dom.minidom.parseString(body)
+        new_xml = xmlconfig.toprettyxml()
+        try:
+            dom = conn.defineXMLFlags(new_xml, 0)
+            dom.create()
+            return {"Following guest sucessfully booted": {"Id" : dom.UUIDString(), "Name": dom.name()},
+                    "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
+        except libvirtError as e:
+            raise APIError(str(e))
 
     def runVM_json(self, obj: BaseModel):
         conn = self.libvirtConnect()
         dict = obj.dict() 
-        xmlconfig = f'''
-          <domain type='kvm'>
-        ​  <name>{dict.get("name")}</name>
-        <!--
-        ​  <uuid>c7a5fdbd-cdaf-9455-926a-d65c16db1809</uuid>
-        500000 memory
-        -->
-        ​  <memory>{dict.get("memory")}</memory>
-        
-        ​  <vcpu>{dict.get("vcpu")}</vcpu>
-        ​  <os>
-        ​  <type>hvm</type>             <!--arch='x86_64' machine='pc'-->
-        ​  <boot dev='hd'/>
-            <boot dev='cdrom'/>
-        ​</os>
-        ​  <clock offset='utc'/>
-        ​  <on_poweroff>destroy</on_poweroff>
-        ​  <on_reboot>restart</on_reboot>
-        ​  <on_crash>destroy</on_crash>
-        ​  <devices>
-        ​    <emulator>{dict.get("emulator")}</emulator>
-        ​    <disk type='file' device='cdrom'>
-        ​      <source file='{dict.get("source_file")}'/>
-        ​      <driver name='qemu' type='raw'/>                 <!--qcow2????-->
-        ​      <target dev='hda'/>
-        ​    </disk>
-            <disk type='file' device='disk'>
-                <driver name='qemu' type='qcow2'/>
-                <source file='/var/lib/libvirt/images/{dict.get("name")}.qcow2'/>           <!-- qemu-img create -f qcow2 vm4.qcow2 10G -->
-                <target dev='vda'/>
-            </disk>
-            <interface type='network'>
-                <source network='default'/>
-            </interface>
-        ​    <input type='mouse' bus='ps2'/>
-        ​    <graphics type='vnc' port='-1' listen='127.0.0.1'/>
-        ​  </devices>
-        ​</domain>'''
-        
-        dom = None
+        xmlconfig = f"""
+            <domain type='kvm'>
+            ​   <name>{dict.get("name")}</name>
+            ​   <memory>{dict.get("memory")}</memory>
+            ​   <vcpu>{dict.get("vcpu")}</vcpu>
+            ​   <os>
+            ​       <type>hvm</type>             
+​                   <boot dev='hd'/>
+                   <boot dev='cdrom'/>
+               </os>
+            ​   <clock offset='utc'/>
+            ​   <on_poweroff>destroy</on_poweroff>
+            ​   <on_reboot>restart</on_reboot>
+            ​   <on_crash>destroy</on_crash>
+            ​   <devices>
+            ​       <emulator>{dict.get("emulator")}</emulator>
+            ​       <disk type='file' device='cdrom'>
+            ​          <source file='{dict.get("source_file")}'/>
+            ​          <driver name='qemu' type='raw'/>          
+            ​          <target dev='hda'/>
+            ​        </disk>
+                    <disk type='file' device='disk'>
+                      <driver name='qemu' type='qcow2'/>
+                      <source file='/var/lib/libvirt/images/{dict.get("name")}.qcow2'/>
+                      <target dev='vda'/>
+                    </disk>
+                    <interface type='network'>
+                        <source network='default'/>
+                    </interface>
+            ​        <input type='mouse' bus='ps2'/>
+            ​        <graphics type='vnc' port='-1' listen='127.0.0.1'/>
+            ​    </devices>
+            ​</domain>"""
         try:
-            #Persistent domain:
             dom = conn.defineXMLFlags(xmlconfig, 0)
             dom.create()
             if dom:
                 return {"Following guest sucessfully booted": {"Id" : dom.UUIDString(), "Name": dom.name()},
                         "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
-            #dom.openGraphics()
-            #dom.openConsole()
         except libvirtError as e:
             raise APIError(str(e))
         
 
     def createStorageVol(self, name):
-        stgvol_xml = f"""<volume type='file'>
-        <name>{name}.qcow2</name>
-        <allocation>0</allocation>
-        <capacity>0</capacity>
-            <target>
-                <path>/var/lib/virt/images/{name}.qcow2</path>
-                <format type='qcow2'/>
-                <permissions>
-                    <owner>107</owner>
-                    <group>107</group>
-                    <mode>0744</mode>
-                    <label>vir_image_t</label>
-                </permissions>
-            </target>
-        </volume>
-        """
         conn = self.libvirtConnect()
-
-        pool = conn.storagePoolLookupByName("default")
-        if pool == None:
-            raise APIError("Failed to locate any StoragePool objects.")
-
-        stgvol = pool.createXML(stgvol_xml, 0)
-        return "Storage volume sucessfully created "
-        if stgvol == None:
-            raise APIError("Failed to create a StorageVol object.")
-
-    def getXMLConfig(self, part: str | None = None):
-        xmlConfig = ""
-        return xmlConfig
-    
-    def editDomain(self):
-        conn = self.libvirtConnect()
-        dom = conn.lookupByUUIDString(id)
-    
-    def getHardwareSpecs(self, part: str | None = None):
-        if part:
-            hardwareSpecs = part
-        else: 
-            hardwareSpecs = "Hello World"
-        return hardwareSpecs
-
+        xmlconfig = f"""
+            <volume type='file'>
+                <name>{name}.qcow2</name>
+                <allocation>0</allocation>
+                <capacity>0</capacity>
+                <target>
+                    <path>/var/lib/virt/images/{name}.qcow2</path>
+                    <format type='qcow2'/>
+                    <permissions>
+                        <owner>107</owner>
+                        <group>107</group>
+                        <mode>0744</mode>
+                        <label>vir_image_t</label>
+                    </permissions>
+                </target>
+            </volume>"""
+        try:
+            pool = conn.storagePoolLookupByName("default")
+            stgvol = pool.createXML(xmlconfig, 0)
+            return "Storage volume sucessfully created "
+        except libvirtError as e:
+            raise APIError(str(e))
+        
     def libvirtConnect(self):
         try:
             conn = libvirt.open('qemu:///system')
@@ -379,5 +316,4 @@ class VM():
         elif state == 5:
             str = "Not Running"
         return {"state": state,
-                "desc": str
-                }#1 = Running, 3 = paused, 5 = saved, shutoff
+                "desc": str}
