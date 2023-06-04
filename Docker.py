@@ -24,14 +24,25 @@ class Docker():
     def __init__(self):
         self.client = docker.from_env()
 
-    def getContainerList(self, showAll):
-        list = self.client.containers.list(all=showAll)
+    def getContainerList(self):
+        list = self.client.containers.list(all=True)
         jsonList = []
         for i in range(0 , list.__len__()):
             jsonList.append({"Id" : list[i].short_id,
                             "Name": list[i].attrs['Name'],
                             "Image": list[i].attrs['Config']['Image'],
                             "Status": list[i].attrs['State']['Status']})
+        return jsonList
+    
+    def getImageList(self):
+        list = self.client.images.list(all=True)
+        jsonList = []
+        for i in range(0 , list.__len__()):
+            jsonList.append({"Name": list[i].attrs["RepoTags"][0],
+                            "Id" : list[i].attrs["Id"],
+                            "Created": list[i].attrs["Created"],
+                            "Container": list[i].attrs["ContainerConfig"]["Hostname"]
+                            })
         return jsonList
 
     def getContainerStats(self, id):
