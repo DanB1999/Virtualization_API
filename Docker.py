@@ -1,11 +1,11 @@
 import docker
 from docker import errors
 from pydantic import BaseModel, Extra
-from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound, ResourceRunning
+from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 
 class ContainerObj(BaseModel):
-    name: str | None = None #Wenn kein key im request vorhanden setzt der den Wert auf NULL
-    ports: object | None = None#Assign random host port 
+    name: str | None = None
+    ports: object | None = None
     volumes: list[str | None ]= None
     detach: bool = True
 
@@ -18,15 +18,12 @@ class ContainerObj(BaseModel):
                 "detach": True
             }
         }
-        extra = Extra.allow     #Erlaubt das Hinzufügen zusätzlicher Felder
-
-
+        extra = Extra.allow
 
 class Docker():
     def __init__(self):
         self.client = docker.from_env()
 
-########List all running container instances#######
     def getContainerList(self, showAll):
         list = self.client.containers.list(all=showAll)
         jsonList = []
@@ -34,62 +31,66 @@ class Docker():
             jsonList.append({"Id" : list[i].short_id,
                             "Name": list[i].attrs['Name'],
                             "Image": list[i].attrs['Config']['Image'],
-                            "Status": list[i].attrs['State']['Status'],
-                            })
+                            "Status": list[i].attrs['State']['Status']})
         return jsonList
 
-########Get container attributes by ID#############
     def getContainerStats(self, id):
         container = self.client.containers.get(id)
-        return container.attrs  #Modify with stats()
+        return container.attrs
 
-########Start Container by ID######################
     def startContainer(self, id):
+        container = self.client.containers.get(id)
         try:
-            container = self.client.containers.get(id)
-            container.start()
-            return "Container sucessfully started"
-        except errors.APIError as e2:
-            raise APIError(str(e2.explanation))
+            state = container.attrs["State"]["Status"]
+            if state != "running":
+                container.start()
+                return "Container sucessfully started"
+            else:
+                raise ResourceAlreadyRunning()
+        except errors.APIError as e:
+            raise APIError(str(e.explanation))
 
-########Stop Container by ID#######################
     def stopContainer(self, id):
+        container = self.client.containers.get(id)
         try:
-            container = self.client.containers.get(id)
-            container.stop()
-            return "Container sucessfully stopped"
-        except errors.APIError as e2:
-            raise APIError(str(e2.explanation))
+            state = container.attrs["State"]["Status"]
+            if state == "running":
+                container.stop()
+                return "Container sucessfully stopped"
+            else: 
+                raise ResourceNotRunning()
+        except errors.APIError as e:
+            raise APIError(str(e.explanation))
 
-########Remove Container by ID######################
     def removeContainer(self, id):
+        container = self.client.containers.get(id)
         try:
-            container = self.client.containers.get(id)
-            container.remove()
-            return "Container sucessfully removed"
-        except errors.APIError as e2:
-            raise ResourceRunning()
+            state = container.attrs["State"]["Status"]
+            if state != "running":
+                container.remove()
+                return "Container sucessfully removed"
+            else:
+                raise ResourceRunning()
+        except errors.APIError as e:
+            raise APIError(str(e.explanation))
         
-########Remove Container by ID######################
     def pruneContainers(self):
         try:
             res = self.client.containers.prune()
             return {"Following containers sucessfully removed":res}
-        except errors.APIError as e2:
-            raise APIError(str(e2.explanation))
+        except errors.APIError as e:
+            raise APIError(str(e.explanation))
         
-########Run container by Image######################
     def runContainer(self, image, attr):
         try:
             obj = self.client.containers.run(image, **attr.dict())
             return {"Following container sucessfully created": {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')},
                     "info": "For further parameters visit: https://docker-py.readthedocs.io/en/stable/containers.html"}
-            
         except errors.APIError as e1:
             if e1.status_code == 404:
                 raise ImageNotFound()
             elif e1.status_code >= 409:
-                raise APIError(str(e1))
+                raise APIError(str(e1.explanation))
         except TypeError as e2: 
             raise ArgumentNotFound(e2.args[0])
         
