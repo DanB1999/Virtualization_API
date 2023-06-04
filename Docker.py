@@ -1,7 +1,7 @@
 import docker
 from docker import errors
 from pydantic import BaseModel, Extra
-from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound
+from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound, ResourceRunning
 
 class ContainerObj(BaseModel):
     name: str | None = None #Wenn kein key im request vorhanden setzt der den Wert auf NULL
@@ -62,13 +62,13 @@ class Docker():
             raise APIError(str(e2.explanation))
 
 ########Remove Container by ID######################
-    def removeContainer(self, id, forceBool):
+    def removeContainer(self, id):
         try:
             container = self.client.containers.get(id)
-            container.remove(force = forceBool)
+            container.remove()
             return "Container sucessfully removed"
         except errors.APIError as e2:
-            raise APIError(str(e2.explanation))
+            raise ResourceRunning()
         
 ########Remove Container by ID######################
     def pruneContainers(self):
@@ -97,4 +97,4 @@ class Docker():
         try:
             return self.client.containers.get(id)
         except errors.NotFound:
-            raise ResourceNotFound()
+            return None
