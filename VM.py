@@ -44,23 +44,43 @@ class VM():
         return jsonList
     
     def listSnapshots(self, id):
-        onn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        conn = self.libvirtConnect()
+        dom = conn.lookupByUUIDString(id)
         snapshots = dom.listAllSnapshots()
         jsonList = []
         for elem in snapshots:
             xmlDesc = etree.fromstring(elem.getXMLDesc())
-            creationTime = xmlDesc.find('creationTime')
             jsonList.append({"name": elem.getName(),
-                             "timestamp": datetime.fromtimestamp(int(xmlDesc.find('creationTime').text)),
-                             "state": xmlDesc.find('state').text,
+                             "timestamp": datetime.fromtimestamp(int(xmlDesc.find("creationTime").text)),
+                             "state": xmlDesc.find("state").text,
                              "isCurrent": elem.isCurrent(),
-                             "memorySnapshot": xmlDesc.find('memory').get('snapshot')})                             
+                             "memorySnapshot": xmlDesc.find("memory").get("snapshot")})                             
         return jsonList
+    
+    def listStorageVolumes(self):
+        conn = self.libvirtConnect()
+        pool = conn.storagePoolLookupByName("default")
+        if pool == None:
+            raise APIError("Failed to locate any StoragePool objects")
+        stgvols = pool.listVolumes()
+        jsonList = []
+        for stgvolname in stgvols:
+            stgvol = pool.storageVolLookupByName(stgvolname)
+            #str(stgvolname).split("/")[-1]
+            info = stgvol.info()
+            jsonList.append({"name": stgvolname,
+                             "path": stgvolname,
+                             "Type": str(info[0]),
+                             "Capacity": str(info[1]),
+                             "Allocation": str(info[1])
+                             })
+            
+        return jsonList
+
 
     def getDomainStats(self, id):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         state, maxmem, mem, cpus, cput = dom.info()
         return {"uuid": dom.UUIDString(),
                 "name": dom.name(),
@@ -83,7 +103,7 @@ class VM():
 
     def startVM(self, id, revertSnapshot):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         try:
             if revertSnapshot:
                 snapshot = dom.snapshotLookupByName(revertSnapshot)
@@ -106,7 +126,7 @@ class VM():
     
     def stopVM(self, id):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         try:
             state = self.getDomStatus(dom).get("state")
             if state == 1:
@@ -119,7 +139,7 @@ class VM():
         
     def createSnapshot(self, id, snapshot_name):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         SNAPSHOT_XML_TEMPLATE = """
                                 <domainsnapshot>
                                     <name>{snapshot_name}</name>
@@ -146,12 +166,13 @@ class VM():
                 SNAPSHOT_XML_TEMPLATE.format(snapshot_name=snapshot_name),
                 libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC
             )
+            return "Snaphot of " + dom.name() + " was sucessfully created"
         except Exception as e:
             return e
             
     def shutdownVM(self, id, save, force):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         try:
             state = self.getDomStatus(dom).get("state")      
             if state == 1:
@@ -175,7 +196,7 @@ class VM():
 
     def deleteVM(self, id):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         try:
             #Aktive Vm wird lediglich pausiert
             state = self.getDomStatus(dom).get("state")      
@@ -189,13 +210,30 @@ class VM():
     
     def deleteSnapshot(self, id, name):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
+        dom = conn.lookupByUUIDString(id)
         try:
             snapshot = dom.snapshotLookupByName(name)
             snapshot.delete()
             return "Snapshot " + name + " sucessfully deleted"
         except libvirtError as e:
             raise APIError(str(e))
+    
+    def deleteStorageVol(self, id):
+        conn = self.libvirtConnect()
+        dom = conn.lookupByUUIDString(id)
+        try:
+            pool = conn.storagePoolLookupByName("default")
+            if pool == None:
+                raise APIError("Failed to locate any StoragePool objects.")
+            state = self.getDomStatus(dom).get("state")      
+            if state != 1:
+                stgvol = pool.storageVolLookupByName(dom.name()+".qcow2")
+                stgvol.delete()
+                return "Storage volume sucessfully created"
+            else:
+                raise ResourceRunning()
+        except libvirtError as e:
+            raise APIError("Failed to delete storage volume")            
         
     def runVM_xml(self, body):
             conn = self.libvirtConnect()
@@ -254,24 +292,53 @@ class VM():
         
         dom = None
         try:
+            #Persistent domain:
             dom = conn.defineXMLFlags(xmlconfig, 0)
             dom.create()
-            return {"Following guest sucessfully booted": {"Id" : dom.UUIDString(), "Name": dom.name()},
-                    "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
+            if dom:
+                return {"Following guest sucessfully booted": {"Id" : dom.UUIDString(), "Name": dom.name()},
+                        "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
             #dom.openGraphics()
             #dom.openConsole()
         except libvirtError as e:
             raise APIError(str(e))
         
+
+    def createStorageVol(self, name):
+        stgvol_xml = f"""<volume type='file'>
+        <name>{name}.qcow2</name>
+        <allocation>0</allocation>
+        <capacity>0</capacity>
+            <target>
+                <path>/var/lib/virt/images/{name}.qcow2</path>
+                <format type='qcow2'/>
+                <permissions>
+                    <owner>107</owner>
+                    <group>107</group>
+                    <mode>0744</mode>
+                    <label>vir_image_t</label>
+                </permissions>
+            </target>
+        </volume>
+        """
+        conn = self.libvirtConnect()
+
+        pool = conn.storagePoolLookupByName("default")
+        if pool == None:
+            raise APIError("Failed to locate any StoragePool objects.")
+
+        stgvol = pool.createXML(stgvol_xml, 0)
+        return "Storage volume sucessfully created "
+        if stgvol == None:
+            raise APIError("Failed to create a StorageVol object.")
+
     def getXMLConfig(self, part: str | None = None):
         xmlConfig = ""
         return xmlConfig
     
     def editDomain(self):
         conn = self.libvirtConnect()
-        dom = self.getDomainByUUID(id)
-
-
+        dom = conn.lookupByUUIDString(id)
     
     def getHardwareSpecs(self, part: str | None = None):
         if part:
@@ -291,10 +358,16 @@ class VM():
         conn = self.libvirtConnect()
         try:
             return conn.lookupByUUIDString(id)
-        except Exception:
+        except libvirtError as e:
             return None
-
-
+    
+    def getDomainSnapshots(self, id):
+        conn = self.libvirtConnect()
+        dom = conn.lookupByUUIDString(id)
+        try:
+            return dom.listAllSnapshots()
+        except libvirtError as e:
+            raise APIError(e.args[0])
 
     def getDomStatus(self, dom):
         state, maxmem, mem, cpus, cput = dom.info()
