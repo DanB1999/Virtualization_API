@@ -5,7 +5,7 @@ from libvirt import libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-from exceptions import APIError, ConnectionFailed, DomainAlreadyRunning, DomainNotRunning, ResourceRunning
+from exceptions import APIError, ConnectionFailed, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -36,8 +36,7 @@ class VM():
                             "name": dom.name(),
                             "isActive": dom.isActive(),
                             "status": self.getDomStatus(dom).get("desc"),
-                            "isPersistent": dom.isPersistent()
-                            })
+                            "isPersistent": dom.isPersistent()})
         return jsonList
     
     def listSnapshots(self, id):
@@ -68,9 +67,7 @@ class VM():
                              "path": stgvol.path(),
                              "Type": str(info[0]),
                              "Capacity": str(info[1]),
-                             "Allocation": str(info[2])
-                             })
-            
+                             "Allocation": str(info[2])})
         return jsonList
 
     def getDomainStats(self, id):
@@ -89,8 +86,7 @@ class VM():
                     "maxMemory": str(maxmem),
                     "memory": str(mem),
                     "cpuNum": str(cpus),
-                    "cpuTime": str(cput)
-                }}
+                    "cpuTime": str(cput)}}
 
     def startVM(self, id, revertSnapshot):
         conn = self.libvirtConnect()
@@ -108,7 +104,7 @@ class VM():
                 dom.create()
                 return "VM sucessfully restarted"
             elif state == 1:
-                raise DomainAlreadyRunning()
+                raise ResourceAlreadyRunning()
         except libvirtError as e:
             raise APIError(str(e))            
     
@@ -121,7 +117,7 @@ class VM():
                 dom.suspend()
                 return "VM sucessfully stopped"
             else:
-                raise DomainNotRunning()
+                raise ResourceNotRunning()
         except libvirtError as e:
             raise APIError(str(e))
         
@@ -157,7 +153,7 @@ class VM():
                     dom.shutdown()
                     return "VM sucessfully shutdown"
             else:
-                raise DomainNotRunning()                    
+                raise ResourceNotRunning()                    
         except libvirtError as e:
             raise APIError(str(e))  
 
