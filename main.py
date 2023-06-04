@@ -65,12 +65,14 @@ async def read_users_me(
 @app.get("/resources")
 async def get_list(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["basic"])],    
-    type: Annotated[str, Query(description="docker container, kvm-qemu")]
+    type: Annotated[str, Query(description="docker container, kvm-qemu, kvm-qemu volumes")]
 ):
     if type in "docker-container":
         return docker.getContainerList(True)
     elif type in "kvm-qemu":
         return vm.listDomains()
+    elif type in "volumes":
+        return vm.listStorageVolumes()
 
 @app.get("/resources/{id}")
 async def get_Info(
@@ -107,8 +109,7 @@ async def start_Ressource(
 @app.put("/resources/{id}/stop")
 async def stop_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
-    id: str,
-    type: str
+    id: str
 ):
     try:
         if getResourceById(id) == "docker":
@@ -124,23 +125,28 @@ async def stop_Ressource(
 async def remove_Ressource(
     current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],
     id: str,
-    force: Annotated[bool, Query(description="Force Deletion of docker container")] = False,
-    deleteSnapshot: Annotated[str, Query(description="Delete snapshot instead of vm")] = None
+    deleteStorageVol: Annotated[bool, Query(description="Delete asociated storage volume")] = True,
+    deleteSnapshot: Annotated[str, Query(description="Delete snapshot instead of vm")] = None,
 ):
     try:
-        if getResourceById(id) == "docker":
-            return docker.removeContainer(id)
-        elif getResourceById(id) == "kvm-qemu":
-            if deleteSnapshot:
-                return vm.deleteSnapshot(id, deleteSnapshot)
-            else:
-                return vm.deleteVM(id)
+        return docker.removeContainer(id)
+    #try:
+    #    if getResourceById(id) == "docker":
+    #        return docker.removeContainer(id)
+    #    elif getResourceById(id) == "kvm-qemu":
+    #        if deleteSnapshot:
+    #            return vm.deleteSnapshot(id, deleteSnapshot)
+    #        if len(vm.getDomainSnapshots(id)) == 0:
+    #            if deleteStorageVol:
+    #                    vm.deleteStorageVol(id)
+    #            return vm.deleteVM(id)
+    #        else: 
+    #            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete inactive domain with " + str(len(vm.getDomainSnapshots(id)))+ " snapshots")
+#
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except ResourceRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
-    except APIError as e3:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e3.message)
 
 #Docker-spezifische Funktionen:
 @app.delete("/resources/docker/prune")
@@ -175,6 +181,7 @@ async def take_snapshot(
     id: str,
     snapshot_name: str
 ):
+    getResourceById()
     try:
         return vm.createSnapshot(id, snapshot_name)
     except APIError as e1:
@@ -187,6 +194,7 @@ async def shutdown_vm(
     save: Annotated[bool, Query(description="Save VM for later use, priority over force command")] = False, 
     force: bool = False, 
 ):
+    getResourceById()
     try:
         return vm.shutdownVM(id, save, force)
     except APIError as e1:
@@ -226,15 +234,18 @@ async def run_vm_json(
     obj: DomainObj
 ):
     try:
+        vm.createStorageVol(obj.dict().get("name"))
         return vm.runVM_json(obj)#Response(content=body, media_type='application/xml')
     except APIError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 def getResourceById(id):
-    try:
-        if vm.getDomainByUUID(id):
-            return "kvm-qemu"
-        elif docker.getContainerbyID(id):
-            return "docker"
-    except ResourceNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    res = None
+    if vm.getDomainByUUID(id):
+        res = "kvm-qemu"
+    elif docker.getContainerbyID(id):
+        res = "docker"
+    
+    if res == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found -> Please check the identifier and try it again")
+    return res
