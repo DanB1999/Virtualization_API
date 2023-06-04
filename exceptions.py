@@ -1,8 +1,3 @@
-class ResourceNotFound(Exception):
-    def __init__(self, message="Resource not found -> Please check the identifier and try it again"):
-        self.message = message
-        super().__init__(self.message)
-
 class ArgumentNotFound(Exception):
     def __init__(self, message):
         self.message = message+" -> Search the documentation for the right argument"
@@ -23,13 +18,13 @@ class ConnectionFailed(Exception):
         self.message = message
         super().__init__(self.message)
 
-class DomainNotRunning(Exception):
-    def __init__(self, message="Requested Domain is not running"):
+class ResourceNotRunning(Exception):
+    def __init__(self, message="Requested resource is not running"):
         self.message = message
         super().__init__(self.message)
 
-class DomainAlreadyRunning(Exception):
-    def __init__(self, message="Requested Domain is already running"):
+class ResourceAlreadyRunning(Exception):
+    def __init__(self, message="Requested resource is already running"):
         self.message = message
         super().__init__(self.message)
 
