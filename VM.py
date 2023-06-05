@@ -120,22 +120,6 @@ class VM():
                 raise ResourceNotRunning()
         except libvirtError as e:
             raise APIError(str(e))
-        
-    def createSnapshot(self, id, snapshot_name):
-        conn = self.libvirtConnect()
-        dom = conn.lookupByUUIDString(id)
-        xmlconfig = f"""
-            <domainsnapshot>
-                <name>{snapshot_name}</name>
-            </domainsnapshot>"""
-        try:
-            dom.snapshotCreateXML(
-                xmlconfig.format(snapshot_name=snapshot_name),
-                libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC
-            )
-            return "Snaphot of " + dom.name() + " was sucessfully created"
-        except libvirtError as e:
-            raise APIError(str(e))
             
     def shutdownVM(self, id, save, force):
         conn = self.libvirtConnect()
@@ -253,7 +237,22 @@ class VM():
                         "info": "For further parameters visit: https://libvirt.org/formatdomain.html"}
         except libvirtError as e:
             raise APIError(str(e))
-        
+
+    def createSnapshot(self, id, snapshot_name):
+        conn = self.libvirtConnect()
+        dom = conn.lookupByUUIDString(id)
+        xmlconfig = f"""
+            <domainsnapshot>
+                <name>{snapshot_name}</name>
+            </domainsnapshot>"""
+        try:
+            dom.snapshotCreateXML(
+                xmlconfig.format(snapshot_name=snapshot_name),
+                libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_ATOMIC
+            )
+            return "Snaphot of " + dom.name() + " was sucessfully created"
+        except libvirtError as e:
+            raise APIError(str(e))  
 
     def createStorageVol(self, name):
         conn = self.libvirtConnect()
