@@ -121,6 +121,19 @@ class VM():
         except libvirtError as e:
             raise APIError(str(e))
             
+    def rebootVM(self, id):
+        conn = self.libvirtConnect()
+        dom = conn.lookupByUUIDString(id)
+        try:
+            state = self.getDomStatus(dom).get("state")
+            if state == 1:
+                dom.reboot()
+                return "VM sucessfully rebooted"
+            else:
+                raise ResourceNotRunning()
+        except libvirtError as e:
+            raise APIError(str(e))
+            
     def shutdownVM(self, id, save, force):
         conn = self.libvirtConnect()
         dom = conn.lookupByUUIDString(id)
