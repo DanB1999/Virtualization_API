@@ -72,6 +72,18 @@ class Docker():
                 raise ResourceNotRunning()
         except errors.APIError as e:
             raise APIError(str(e.explanation))
+            
+    def restartContainer(self, id):
+        container = self.client.containers.get(id)
+        try:
+            state = container.attrs["State"]["Status"]
+            if state == "running":
+                container.restart()
+                return "Container sucessfully restarted"
+            else: 
+                raise ResourceNotRunning()
+        except errors.APIError as e:
+            raise APIError(str(e.explanation))
 
     def removeContainer(self, id):
         container = self.client.containers.get(id)
