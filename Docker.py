@@ -24,7 +24,7 @@ class Docker():
     def __init__(self):
         self.client = docker.from_env()
 
-    def getContainerList(self):
+    def list_containers(self):
         list = self.client.containers.list(all=True)
         jsonList = []
         for i in range(0 , list.__len__()):
@@ -34,7 +34,7 @@ class Docker():
                             "Status": list[i].attrs['State']['Status']})
         return jsonList
     
-    def getImageList(self):
+    def list_images(self):
         list = self.client.images.list(all=True)
         jsonList = []
         for i in range(0 , list.__len__()):
@@ -45,11 +45,11 @@ class Docker():
                             })
         return jsonList
 
-    def getContainerStats(self, id):
+    def get_container_info(self, id):
         container = self.client.containers.get(id)
         return container.attrs
 
-    def startContainer(self, id):
+    def start_container(self, id):
         container = self.client.containers.get(id)
         try:
             state = container.attrs["State"]["Status"]
@@ -61,7 +61,7 @@ class Docker():
         except errors.APIError as e:
             raise APIError(str(e.explanation))
 
-    def stopContainer(self, id):
+    def stop_container(self, id):
         container = self.client.containers.get(id)
         try:
             state = container.attrs["State"]["Status"]
@@ -73,7 +73,7 @@ class Docker():
         except errors.APIError as e:
             raise APIError(str(e.explanation))
             
-    def restartContainer(self, id):
+    def restart_container(self, id):
         container = self.client.containers.get(id)
         try:
             state = container.attrs["State"]["Status"]
@@ -85,7 +85,7 @@ class Docker():
         except errors.APIError as e:
             raise APIError(str(e.explanation))
 
-    def removeContainer(self, id):
+    def remove_container(self, id):
         container = self.client.containers.get(id)
         try:
             state = container.attrs["State"]["Status"]
@@ -97,14 +97,14 @@ class Docker():
         except errors.APIError as e:
             raise APIError(str(e.explanation))
         
-    def pruneContainers(self):
+    def prune_containers(self):
         try:
             res = self.client.containers.prune()
             return {"Following containers sucessfully removed":res}
         except errors.APIError as e:
             raise APIError(str(e.explanation))
         
-    def runContainer(self, image, attr):
+    def run_container(self, image, attr):
         try:
             obj = self.client.containers.run(image, **attr.dict())
             return {"Following container sucessfully created": {"Id" : obj.attrs.get('Id'), "Name": obj.attrs.get('Name')},
@@ -117,7 +117,7 @@ class Docker():
         except TypeError as e2: 
             raise ArgumentNotFound(e2.args[0])
         
-    def getContainerbyID(self,id):
+    def get_container(self,id):
         try:
             return self.client.containers.get(id)
         except errors.NotFound:
