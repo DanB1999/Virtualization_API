@@ -111,6 +111,21 @@ async def stop_Ressource(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except ResourceNotRunning as e2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
+
+@app.put("/resources/{id}/restart")
+async def restart_Ressource(
+    current_user: Annotated[User, Security(get_current_active_user, scopes=["advanced"])],   
+    id: str
+):
+    try:
+        if getResourceById(id) == "docker":
+            return docker.restartContainer(id)
+        elif getResourceById(id) == "kvm-qemu":
+            return vm.rebootVM(id)
+    except APIError as e1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
+    except ResourceNotRunning as e2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e2.message)
     
 @app.delete("/resources/{id}/delete")
 async def remove_Ressource(
