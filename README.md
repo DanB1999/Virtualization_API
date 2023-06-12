@@ -6,8 +6,8 @@ REST-API zur Steuerung und Verwaltung von Virtuellen Maschinen und Containern, i
 uvicorn main:app --reload
 
 # Funktionen:
-Docker
-Auflisten von Containern und Images 
+Docker:
+\nAuflisten von Containern und Images 
 Informationen über Container
 Starten, Stoppen und Neustarten von Containern
 Löschen von Containern 
