@@ -7,7 +7,7 @@ uvicorn main:app --reload
 
 # Funktionen:
 Docker:
-\nAuflisten von Containern und Images 
+Auflisten von Containern und Images 
 Informationen über Container
 Starten, Stoppen und Neustarten von Containern
 Löschen von Containern 
