@@ -1,0 +1,505 @@
+{
+	"info": {
+		"_postman_id": "260cb376-3893-48ca-9b76-7f012a8a0fc8",
+		"name": "Virtualization API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authenticate User with scope",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "grant_type",
+							"value": "password",
+							"type": "text"
+						},
+						{
+							"key": "scope",
+							"value": "user+admin",
+							"type": "text"
+						},
+						{
+							"key": "username",
+							"value": "johndoe",
+							"type": "text"
+						},
+						{
+							"key": "password",
+							"value": "secret",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/token",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"token"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get User Information",
+			"request": {
+				"auth": {
+					"type": "bearer"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbInVzZXIiLCJhZG1pbiJdLCJleHAiOjE2ODU0MDM0NTZ9.8yVel9GU4xN2Gg3_9qBf_a-mEPuY7i2Ws7VvgAd56QU",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/users/me",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"users",
+						"me"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get List of Resources",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources?type=vm",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources"
+					],
+					"query": [
+						{
+							"key": "type",
+							"value": "vm"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Resource",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/67fa4ca69a87",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"67fa4ca69a87"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start Resource",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/67fa4ca69a87/start",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"67fa4ca69a87",
+						"start"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Stop Resource",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/67fa4ca69a87/stop",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"67fa4ca69a87",
+						"stop"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Restart Resource",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/67fa4ca69a87/restart",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"67fa4ca69a87",
+						"restart"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Resource",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/67fa4ca69a87/delete",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"67fa4ca69a87",
+						"delete"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prune Exited Containers",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/docker/prune",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"docker",
+						"prune"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Take Snapshot of VM",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/46b9a9cc-e6dc-4f96-9b65-5e57d8a4dcda/snapshot?snapshot_name=test1",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"46b9a9cc-e6dc-4f96-9b65-5e57d8a4dcda",
+						"snapshot"
+					],
+					"query": [
+						{
+							"key": "",
+							"value": "",
+							"disabled": true
+						},
+						{
+							"key": null,
+							"value": "",
+							"disabled": true
+						},
+						{
+							"key": "snapshot_name",
+							"value": "test1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Shutdown VM",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/46b9a9cc-e6dc-4f96-9b65-5e57d8a4dcda/shutdown",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"46b9a9cc-e6dc-4f96-9b65-5e57d8a4dcda",
+						"shutdown"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Run Container",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"Container1\",\n  \"ports\": {\n    \"5000/tcp\": 1000\n  },\n  \"volumes\": [\n    \"/home/user1/:/mnt/vol2\"\n  ],\n  \"detach\": true\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/docker/run?image=hello-world",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"docker",
+						"run"
+					],
+					"query": [
+						{
+							"key": "image",
+							"value": "hello-world"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Run VM with xml",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "xml"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/kvm-qemu/run/xml",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"kvm-qemu",
+						"run",
+						"xml"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Run VM with json",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwic2NvcGVzIjpbImJhc2ljIiwiYWR2YW5jZWQiXSwiZXhwIjoxNjg2OTI0ODIzfQ.guwosYXJLNCtZtgbaXZbT-eTh9REnyACvEgiwOJNsUI",
+						"type": "default"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"test\",\n  \"memory\": 500000,\n  \"vcpu\": 1,\n  \"source_file\": \"/var/lib/libvirt/isos/debian-11.6.0-amd64-netinst.iso\",\n  \"emulator\": \"/usr/bin/qemu-system-x86_64\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/resources/kvm-qemu/run/json",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"resources",
+						"kvm-qemu",
+						"run",
+						"json"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
