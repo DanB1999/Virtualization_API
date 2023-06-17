@@ -5,9 +5,16 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from Docker import Docker, ContainerObj
 from VM import VM, DomainObj
-from Security import User, Token, fake_users_db, authenticate_user, create_access_token, get_current_active_user, ACCESS_TOKEN_EXPIRE_MINUTES
+from Security import (
+    User, Token, fake_users_db, 
+    authenticate_user, create_access_token,
+    get_current_active_user, ACCESS_TOKEN_EXPIRE_MINUTES
+)
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import APIError, ArgumentNotFound, ResourceAlreadyRunning, ResourceNotFound, ResourceNotRunning, ImageNotFound, ResourceRunning
+from exceptions import (
+    APIError, ArgumentNotFound, ResourceAlreadyRunning, 
+    ResourceNotFound, ResourceNotRunning, ImageNotFound, ResourceRunning
+)
 
 docker = Docker()
 vm = VM()
@@ -149,7 +156,9 @@ async def remove_resource(
                     vm.delete_storage_vol(id)
                 return vm.delete_vm(id)
             else: 
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete inactive domain with " + str(len(vm.getDomainSnapshots(id)))+ " snapshots")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, 
+                                    detail="Cannot delete inactive domain with " 
+                                        + str(len(vm.getDomainSnapshots(id)))+ " snapshots")
     except APIError as e1:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e1.message)
     except ResourceRunning as e2:
@@ -226,7 +235,8 @@ async def run_vm_xml(
         body = await request.body()
         res = vm.run_vm_xml(body)
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Content type {content_type} not supported')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, 
+                            detail=f'Content type {content_type} not supported')
     return res
     
 @app.post("/resources/kvm-qemu/run/json")
