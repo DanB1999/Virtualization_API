@@ -12,7 +12,6 @@ class DomainObj(BaseModel):
     memory: int
     vcpu: int
     source_file: str
-    emulator: str
     
     class Config:
             schema_extra = {
@@ -20,8 +19,7 @@ class DomainObj(BaseModel):
                     "name": "vm1",
                     "memory": 500000,
                     "vcpu": 1,
-                    "source_file": "/var/lib/libvirt/isos/debian-11.6.0-amd64-netinst.iso",
-                    "emulator": "/usr/bin/qemu-system-x86_64"
+                    "source_file": "/var/lib/libvirt/isos/debian-11.6.0-amd64-netinst.iso"
                 }
             }
 
@@ -224,7 +222,7 @@ class VM():
             ​   <on_reboot>restart</on_reboot>
             ​   <on_crash>destroy</on_crash>
             ​   <devices>
-            ​       <emulator>{dict.get("emulator")}</emulator>
+            ​       <emulator>/usr/bin/qemu-system-x86_64</emulator>
             ​       <disk type='file' device='cdrom'>
             ​          <source file='{dict.get("source_file")}'/>
             ​          <driver name='qemu' type='raw'/>          
