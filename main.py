@@ -37,7 +37,6 @@ async def login_for_access_token(
         scopes = str(form_data.scopes[0]).split('+')
     else: 
         scopes = form_data.scopes    
-    print(scopes)
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
