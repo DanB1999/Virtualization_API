@@ -245,6 +245,6 @@ def get_resource(id):
         try:
             if docker.get_container(id):
                 res = "docker"
-        except ResourceNotFound:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found -> Please check the identifier and try it again")
+        except ResourceNotFound as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     return res
