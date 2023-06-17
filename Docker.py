@@ -46,11 +46,11 @@ class Docker():
         return jsonList
 
     def get_container_info(self, id):
-        container = self.client.containers.get(id)
+        container = self.get_container(id)
         return container.attrs
 
     def start_container(self, id):
-        container = self.client.containers.get(id)
+        container = self.get_container(id)
         try:
             state = container.attrs["State"]["Status"]
             if state != "running":
@@ -62,7 +62,7 @@ class Docker():
             raise APIError(str(e.explanation))
 
     def stop_container(self, id):
-        container = self.client.containers.get(id)
+        container = self.get_container(id)
         try:
             state = container.attrs["State"]["Status"]
             if state == "running":
@@ -74,7 +74,7 @@ class Docker():
             raise APIError(str(e.explanation))
             
     def restart_container(self, id):
-        container = self.client.containers.get(id)
+        container = self.get_container(id)
         try:
             state = container.attrs["State"]["Status"]
             if state == "running":
@@ -86,7 +86,7 @@ class Docker():
             raise APIError(str(e.explanation))
 
     def remove_container(self, id):
-        container = self.client.containers.get(id)
+        container = self.get_container(id)
         try:
             state = container.attrs["State"]["Status"]
             if state != "running":
