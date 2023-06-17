@@ -39,7 +39,7 @@ class VM():
     
     def list_snapshots(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         snapshots = dom.listAllSnapshots()
         jsonList = []
         for elem in snapshots:
@@ -70,7 +70,7 @@ class VM():
 
     def get_vm_info(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         state, maxmem, mem, cpus, cput = dom.info()
         return {"uuid": dom.UUIDString(),
                 "name": dom.name(),
@@ -88,7 +88,7 @@ class VM():
 
     def start_vm(self, id, revertSnapshot):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             if revertSnapshot:
                 snapshot = dom.snapshotLookupByName(revertSnapshot)
@@ -108,7 +108,7 @@ class VM():
     
     def stop_vm(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             state = self.getDomStatus(dom).get("state")
             if state == 1:
@@ -121,7 +121,7 @@ class VM():
             
     def reboot_vm(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             state = self.getDomStatus(dom).get("state")
             if state == 1:
@@ -134,7 +134,7 @@ class VM():
             
     def shutdown_vm(self, id, save, force):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             state = self.getDomStatus(dom).get("state")      
             if state == 1:
@@ -154,7 +154,7 @@ class VM():
 
     def delete_vm(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             state = self.getDomStatus(dom).get("state")      
             if state != 1:
@@ -167,7 +167,7 @@ class VM():
     
     def delete_snapshot(self, id, name):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             snapshot = dom.snapshotLookupByName(name)
             snapshot.delete()
@@ -177,7 +177,7 @@ class VM():
     
     def delete_storage_vol(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             pool = conn.storagePoolLookupByName("default")
             if pool == None:
@@ -251,7 +251,7 @@ class VM():
 
     def create_snapshot(self, id, snapshot_name):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         xmlconfig = f"""
             <domainsnapshot>
                 <name>{snapshot_name}</name>
@@ -306,7 +306,7 @@ class VM():
     
     def get_vm_snapshots(self, id):
         conn = self.libvirt_connect()
-        dom = conn.lookupByUUIDString(id)
+        dom = self.get_vm(id)
         try:
             return dom.listAllSnapshots()
         except libvirtError as e:
