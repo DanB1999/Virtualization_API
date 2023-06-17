@@ -303,8 +303,8 @@ class VM():
         conn = self.libvirt_connect()
         try:
             return conn.lookupByUUIDString(id)
-        except libvirtError as e:
-            return ResourceNotFound()
+        except libvirtError:
+            raise ResourceNotFound()
     
     def get_vm_snapshots(self, id):
         conn = self.libvirt_connect()
