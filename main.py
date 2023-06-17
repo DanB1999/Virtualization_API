@@ -33,6 +33,11 @@ app.add_middleware(
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ):  
+    if len(form_data.scopes) == 1:
+        scopes = str(form_data.scopes[0]).split('+')
+    else: 
+        scopes = form_data.scopes    
+    print(scopes)
     user = authenticate_user(fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -42,7 +47,7 @@ async def login_for_access_token(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "scopes": form_data.scopes},
+        data={"sub": user.username, "scopes": scopes},
         expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
