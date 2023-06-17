@@ -1,3 +1,8 @@
+class ResourceNotFound(Exception):
+    def __init__(self, message="Requested Resource not found -> Check identifier"):
+        self.message = message
+        super().__init__(self.message)
+
 class ArgumentNotFound(Exception):
     def __init__(self, message):
         self.message = message+" -> Search the documentation for the right argument"

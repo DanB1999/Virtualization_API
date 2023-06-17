@@ -1,7 +1,7 @@
 import docker
 from docker import errors
 from pydantic import BaseModel, Extra
-from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
+from exceptions import APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 
 class ContainerObj(BaseModel):
     name: str | None = None
@@ -116,9 +116,9 @@ class Docker():
                 raise APIError(str(e1.explanation))
         except TypeError as e2: 
             raise ArgumentNotFound(e2.args[0])
-        
-    def get_container(self,id):
-        try:
+    
+    def get_container(self, id):
+        try: 
             return self.client.containers.get(id)
         except errors.NotFound:
-            return None
+            ResourceNotFound()

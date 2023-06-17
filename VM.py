@@ -5,7 +5,7 @@ from libvirt import libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-from exceptions import APIError, ConnectionFailed, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
+from exceptions import APIError, ConnectionFailed, ResourceNotFound, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -304,7 +304,7 @@ class VM():
         try:
             return conn.lookupByUUIDString(id)
         except libvirtError as e:
-            return None
+            return ResourceNotFound()
     
     def get_vm_snapshots(self, id):
         conn = self.libvirt_connect()

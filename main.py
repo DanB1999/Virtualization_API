@@ -7,7 +7,7 @@ from Docker import Docker, ContainerObj
 from VM import VM, DomainObj
 from Security import User, Token, fake_users_db, authenticate_user, create_access_token, get_current_active_user, ACCESS_TOKEN_EXPIRE_MINUTES
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import APIError, ArgumentNotFound, ResourceAlreadyRunning, ResourceNotRunning, ImageNotFound, ResourceRunning
+from exceptions import APIError, ArgumentNotFound, ResourceAlreadyRunning, ResourceNotFound, ResourceNotRunning, ImageNotFound, ResourceRunning
 
 docker = Docker()
 vm = VM()
@@ -238,11 +238,13 @@ async def run_vm_json(
 
 def get_resource(id):
     res = None
-    if vm.get_vm(id):
-        res = "kvm-qemu"
-    elif docker.get_container(id):
-        res = "docker"
-    
-    if res == None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found -> Please check the identifier and try it again")
+    try:
+        if vm.get_vm(id):
+            res = "kvm-qemu"
+    except ResourceNotFound:
+        try:
+            if docker.get_container(id):
+                res = "docker"
+        except ResourceNotFound:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found -> Please check the identifier and try it again")
     return res
