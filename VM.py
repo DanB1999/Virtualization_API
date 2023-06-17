@@ -33,7 +33,7 @@ class VM():
             jsonList.append({"uuid": dom.UUIDString(),
                             "name": dom.name(),
                             "isActive": dom.isActive(),
-                            "status": self.getDomStatus(dom).get("desc"),
+                            "status": self.get_vm_status(dom).get("desc"),
                             "isPersistent": dom.isPersistent()})
         return jsonList
     
@@ -75,7 +75,7 @@ class VM():
         return {"uuid": dom.UUIDString(),
                 "name": dom.name(),
                 "isActive": dom.isActive(),
-                "status": self.getDomStatus(dom).get("desc"),
+                "status": self.get_vm_status(dom).get("desc"),
                 "isPersistent": dom.isPersistent(),
                 "OSType": dom.OSType(),
                 "hasCurrentSnapshot": dom.hasCurrentSnapshot(),
@@ -94,7 +94,7 @@ class VM():
                 snapshot = dom.snapshotLookupByName(revertSnapshot)
                 dom.revertToSnapshot(snapshot)
                 return "Sucessfully reverted " + revertSnapshot
-            state = self.getDomStatus(dom).get("state")
+            state = self.get_vm_status(dom).get("state")
             if state == 3:
                 dom.resume()
                 return "VM sucessfully resumed"
@@ -110,7 +110,7 @@ class VM():
         conn = self.libvirt_connect()
         dom = self.get_vm(id)
         try:
-            state = self.getDomStatus(dom).get("state")
+            state = self.get_vm_status(dom).get("state")
             if state == 1:
                 dom.suspend()
                 return "VM sucessfully stopped"
@@ -123,7 +123,7 @@ class VM():
         conn = self.libvirt_connect()
         dom = self.get_vm(id)
         try:
-            state = self.getDomStatus(dom).get("state")
+            state = self.get_vm_status(dom).get("state")
             if state == 1:
                 dom.reboot()
                 return "VM sucessfully rebooted"
@@ -136,7 +136,7 @@ class VM():
         conn = self.libvirt_connect()
         dom = self.get_vm(id)
         try:
-            state = self.getDomStatus(dom).get("state")      
+            state = self.get_vm_status(dom).get("state")      
             if state == 1:
                 if save:
                     dom.managedSave()
@@ -156,7 +156,7 @@ class VM():
         conn = self.libvirt_connect()
         dom = self.get_vm(id)
         try:
-            state = self.getDomStatus(dom).get("state")      
+            state = self.get_vm_status(dom).get("state")      
             if state != 1:
                 dom.undefine()
                 return "Requested Ressource was sucessfully deleted"
@@ -182,7 +182,7 @@ class VM():
             pool = conn.storagePoolLookupByName("default")
             if pool == None:
                 raise APIError("Failed to locate any StoragePool objects.")
-            state = self.getDomStatus(dom).get("state")      
+            state = self.get_vm_status(dom).get("state")      
             if state != 1:
                 stgvol = pool.storageVolLookupByName(dom.name()+".qcow2")
                 stgvol.delete()
