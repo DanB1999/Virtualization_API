@@ -121,4 +121,4 @@ class Docker():
         try: 
             return self.client.containers.get(id)
         except errors.NotFound:
-            ResourceNotFound()
+            raise ResourceNotFound()
