@@ -5,7 +5,7 @@ from libvirt import libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-from exceptions import (
+from Exceptions import (
     APIError, ConnectionFailed, ResourceNotFound, 
     ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 )

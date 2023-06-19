@@ -1,7 +1,7 @@
 import docker
 from docker import errors
 from pydantic import BaseModel, Extra
-from exceptions import (
+from Exceptions import (
     APIError, ArgumentNotFound, ImageNotFound, ResourceNotFound, 
     ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
 )

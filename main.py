@@ -11,7 +11,7 @@ from Security import (
     get_current_active_user, ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from fastapi.middleware.cors import CORSMiddleware
-from exceptions import (
+from Exceptions import (
     APIError, ArgumentNotFound, ResourceAlreadyRunning, 
     ResourceNotFound, ResourceNotRunning, ImageNotFound, ResourceRunning
 )
