@@ -5,7 +5,10 @@ from libvirt import libvirtError
 from pydantic import BaseModel
 import xml.dom.minidom    
 from lxml import etree
-from exceptions import APIError, ConnectionFailed, ResourceNotFound, ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
+from exceptions import (
+    APIError, ConnectionFailed, ResourceNotFound, 
+    ResourceAlreadyRunning, ResourceNotRunning, ResourceRunning
+)
 
 class DomainObj(BaseModel):
     name: Union[str, None] = None
@@ -44,8 +47,9 @@ class VM():
         jsonList = []
         for elem in snapshots:
             xmlDesc = etree.fromstring(elem.getXMLDesc())
+            creationTime = datetime.fromtimestamp(int(xmlDesc.find("creationTime").text))
             jsonList.append({"name": elem.getName(),
-                             "timestamp": datetime.fromtimestamp(int(xmlDesc.find("creationTime").text)),
+                             "timestamp": creationTime,
                              "state": xmlDesc.find("state").text,
                              "isCurrent": elem.isCurrent(),
                              "memorySnapshot": xmlDesc.find("memory").get("snapshot")})                             
