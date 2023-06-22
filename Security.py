@@ -52,8 +52,8 @@ class UserInDB(User):
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="token",
-    scopes={"basic": "Basic ead permission on ressources", 
-            "advanced": "Write and run permission on ressources"
+    scopes={"basic": "Basic ead permission on resources", 
+            "advanced": "Write and run permission on resources"
     }
 )
 
